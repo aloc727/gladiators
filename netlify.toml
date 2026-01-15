@@ -1,0 +1,13 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/clan/members"
+  to = "/.netlify/functions/clan-members"
+  status = 200
+
+[[redirects]]
+  from = "/api/clan/warlog"
+  to = "/.netlify/functions/clan-warlog"
+  status = 200

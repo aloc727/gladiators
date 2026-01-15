@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gladiators Clan War Stats</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gladiators Clan War Stats</h1>
+            <p class="clan-tag">Clan Tag: #2CPPJLJ</p>
+            <p class="last-updated" id="lastUpdated">Updated as of: --</p>
+        </header>
+        
+        <div class="controls">
+            <div class="loading" id="loading" style="display: none;">Loading...</div>
+            <span class="next-refresh" id="nextRefresh">Next refresh in: --</span>
+        </div>
+        
+        <div class="table-container">
+            <table id="statsTable">
+                <thead id="tableHead">
+                    <tr>
+                        <th class="sortable" data-column="player">Player Name</th>
+                        <!-- Week columns will be dynamically added here -->
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Data will be dynamically added here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="errorMessage" class="error" style="display: none;"></div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

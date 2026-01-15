@@ -1,0 +1,17 @@
+{
+  "name": "gladiators-war-stats",
+  "version": "1.0.0",
+  "description": "Website to display Gladiators clan war statistics",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "clash-royale",
+    "war-stats",
+    "clan"
+  ],
+  "author": "",
+  "license": "MIT"
+}
