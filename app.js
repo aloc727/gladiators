@@ -294,7 +294,7 @@ function processWarData(members, warLog) {
     }
 
     const columns = sortedWars.map(war => ({
-        label: formatWarDate(war.endDateObj.toISOString()),
+        label: war.label || formatWarDate(war.endDateObj.toISOString()),
         endDate: war.endDateObj
     }));
 
@@ -307,15 +307,19 @@ function processWarData(members, warLog) {
 
     // Update scores for participants
     sortedWars.forEach((war) => {
-        const dateLabel = formatWarDate(war.endDateObj.toISOString());
+        const dateLabel = war.label || formatWarDate(war.endDateObj.toISOString());
         const participants = war.participants || war.standings || [];
         participants.forEach(participant => {
             if (playersMap.has(participant.tag)) {
                 const player = playersMap.get(participant.tag);
-                const warPoints = participant.warPoints || 
-                                 participant.fame || 
-                                 participant.battlesPlayed || 
-                                 participant.wins ||
+                if (participant.warPoints === null) {
+                    player.scores[dateLabel] = null;
+                    return;
+                }
+                const warPoints = participant.warPoints ??
+                                 participant.fame ??
+                                 participant.battlesPlayed ??
+                                 participant.wins ??
                                  0;
                 player.scores[dateLabel] = warPoints;
             }
