@@ -398,14 +398,6 @@ function renderTable(data) {
     roleHeader.addEventListener('click', () => sortTable('role', roleHeader));
     headerRow.appendChild(roleHeader);
 
-    // Clan tenure column
-    const tenureHeader = document.createElement('th');
-    tenureHeader.className = 'sortable';
-    tenureHeader.innerHTML = 'Clan Tenure <span class="info-icon" title="Estimated from when a player first appeared in our clan list.">i</span>';
-    tenureHeader.setAttribute('data-column', 'tenure');
-    tenureHeader.addEventListener('click', () => sortTable('tenure', tenureHeader));
-    headerRow.appendChild(tenureHeader);
-
     // Date columns
     columns.forEach(column => {
         const weekHeader = document.createElement('th');
@@ -455,11 +447,6 @@ function renderTable(data) {
         const roleCell = document.createElement('td');
         roleCell.innerHTML = `<span class="role-pill">${formatRole(player.role)}</span>`;
         row.appendChild(roleCell);
-
-        // Clan tenure (based on firstSeen tracking)
-        const tenureCell = document.createElement('td');
-        tenureCell.textContent = player.firstSeen ? formatDuration(player.firstSeen) : 'N/A';
-        row.appendChild(tenureCell);
 
         // Date scores (war points for each date)
         columns.forEach(column => {
@@ -524,9 +511,6 @@ function sortTable(column, headerElement) {
         } else if (column === 'role') {
             aValue = getRoleRank(a.role);
             bValue = getRoleRank(b.role);
-        } else if (column === 'tenure') {
-            aValue = getTenureSortValue(a.firstSeen);
-            bValue = getTenureSortValue(b.firstSeen);
         } else {
             aValue = getScoreSortValue(a.scores[column], currentSort.direction);
             bValue = getScoreSortValue(b.scores[column], currentSort.direction);
@@ -578,31 +562,12 @@ function getScoreClass(value) {
     return 'score-red';
 }
 
-function getTenureSortValue(firstSeen) {
-    if (!firstSeen) return -1;
-    return new Date(firstSeen).getTime();
-}
-
 function formatRole(role) {
     if (!role) return 'Member';
     if (role.toLowerCase() === 'coleader') return 'Co-Leader';
     return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
-function formatDuration(firstSeen) {
-    const start = new Date(firstSeen);
-    const now = new Date();
-    const diffMs = now - start;
-    if (Number.isNaN(diffMs) || diffMs < 0) return 'N/A';
-
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (days < 30) return `${days}d`;
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months}mo`;
-    const years = Math.floor(months / 12);
-    const remainingMonths = months % 12;
-    return remainingMonths ? `${years}y ${remainingMonths}mo` : `${years}y`;
-}
 
 function getVisibleColumns(columns) {
     if (currentView === 'all') {
