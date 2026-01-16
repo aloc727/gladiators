@@ -13,6 +13,7 @@ let nextRefreshTime = null; // Track when the next refresh is scheduled
 let latestData = null;
 let currentView = 'recent';
 let currentMembersOnly = true;
+let userSort = null;
 
 // Clan policy thresholds
 const WAR_REQUIREMENT = 1600;
@@ -362,6 +363,31 @@ function processWarData(members, warLog) {
         player.promotionReady = streak >= 12;
     });
 
+    // Compute current week rank (based on most recent column)
+    const currentColumn = columns[0];
+    if (currentColumn) {
+        const ranked = Array.from(playersMap.values())
+            .map(player => ({
+                tag: player.tag,
+                score: player.scores[currentColumn.label]
+            }))
+            .filter(item => item.score !== null && item.score !== undefined)
+            .sort((a, b) => b.score - a.score);
+
+        let lastScore = null;
+        let rank = 0;
+        ranked.forEach((item, index) => {
+            if (item.score !== lastScore) {
+                rank = index + 1;
+                lastScore = item.score;
+            }
+            const player = playersMap.get(item.tag);
+            if (player) {
+                player.currentRank = rank;
+            }
+        });
+    }
+
     const players = Array.from(playersMap.values());
 
     return {
@@ -397,6 +423,14 @@ function renderTable(data) {
     roleHeader.setAttribute('data-column', 'role');
     roleHeader.addEventListener('click', () => sortTable('role', roleHeader));
     headerRow.appendChild(roleHeader);
+
+    // Current week rank column
+    const rankHeader = document.createElement('th');
+    rankHeader.className = 'sortable';
+    rankHeader.textContent = 'Rank (Current)';
+    rankHeader.setAttribute('data-column', 'rank');
+    rankHeader.addEventListener('click', () => sortTable('rank', rankHeader));
+    headerRow.appendChild(rankHeader);
 
     // Date columns
     columns.forEach(column => {
@@ -448,6 +482,11 @@ function renderTable(data) {
         roleCell.innerHTML = `<span class="role-pill">${formatRole(player.role)}</span>`;
         row.appendChild(roleCell);
 
+        // Current rank
+        const rankCell = document.createElement('td');
+        rankCell.textContent = player.currentRank ? `#${player.currentRank}` : '—';
+        row.appendChild(rankCell);
+
         // Date scores (war points for each date)
         columns.forEach(column => {
             const scoreCell = document.createElement('td');
@@ -479,7 +518,7 @@ let currentSort = {
     direction: 'desc'
 };
 
-function sortTable(column, headerElement) {
+function sortTable(column, headerElement, forceDirection = null) {
     const tableBody = document.getElementById('tableBody');
     const players = JSON.parse(tableBody.dataset.players || '[]');
     const columns = JSON.parse(tableBody.dataset.columns || '[]');
@@ -490,7 +529,10 @@ function sortTable(column, headerElement) {
     });
     
     // Determine sort direction
-    if (currentSort.column === column) {
+    if (forceDirection) {
+        currentSort.column = column;
+        currentSort.direction = forceDirection;
+    } else if (currentSort.column === column) {
         currentSort.direction = currentSort.direction === 'desc' ? 'asc' : 'desc';
     } else {
         currentSort.column = column;
@@ -511,6 +553,9 @@ function sortTable(column, headerElement) {
         } else if (column === 'role') {
             aValue = getRoleRank(a.role);
             bValue = getRoleRank(b.role);
+        } else if (column === 'rank') {
+            aValue = getRankSortValue(a.currentRank, currentSort.direction);
+            bValue = getRankSortValue(b.currentRank, currentSort.direction);
         } else {
             aValue = getScoreSortValue(a.scores[column], currentSort.direction);
             bValue = getScoreSortValue(b.scores[column], currentSort.direction);
@@ -532,7 +577,10 @@ function sortTable(column, headerElement) {
     // Re-render table with sorted data
     renderTable({ players: sortedPlayers, columns });
     
-    // Restore sort state
+    // Restore sort state + keep user preference
+    if (!forceDirection) {
+        userSort = { column, direction: currentSort.direction };
+    }
     currentSort.column = column;
 }
 
@@ -554,6 +602,13 @@ function getScoreSortValue(value, direction) {
         return direction === 'asc' ? Number.POSITIVE_INFINITY : -1;
     }
     return Number(value) || 0;
+}
+
+function getRankSortValue(value, direction) {
+    if (!value) {
+        return direction === 'asc' ? Number.POSITIVE_INFINITY : -1;
+    }
+    return value;
 }
 
 function getScoreClass(value) {
@@ -584,20 +639,24 @@ function renderView() {
         columns
     };
     renderTable(viewData);
-    applyDefaultSort(viewData.columns);
+    applySavedSortOrDefault(viewData.columns);
     renderHighlights(viewData);
 }
 
-function applyDefaultSort(columns) {
+function applySavedSortOrDefault(columns) {
     if (!columns.length) return;
     const currentColumnLabel = columns[0].label;
-    const header = document.querySelector(`th.sortable[data-column="${currentColumnLabel}"]`);
-    if (!header) return;
+    if (userSort?.column) {
+        const header = document.querySelector(`th.sortable[data-column="${userSort.column}"]`);
+        if (header) {
+            sortTable(userSort.column, header, userSort.direction);
+            return;
+        }
+    }
 
-    if (currentSort.column !== currentColumnLabel || currentSort.direction !== 'desc') {
-        currentSort.column = null;
-        currentSort.direction = 'desc';
-        sortTable(currentColumnLabel, header);
+    const header = document.querySelector(`th.sortable[data-column="${currentColumnLabel}"]`);
+    if (header) {
+        sortTable(currentColumnLabel, header, 'desc');
     }
 }
 
