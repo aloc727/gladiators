@@ -584,7 +584,21 @@ function renderView() {
         columns
     };
     renderTable(viewData);
+    applyDefaultSort(viewData.columns);
     renderHighlights(viewData);
+}
+
+function applyDefaultSort(columns) {
+    if (!columns.length) return;
+    const currentColumnLabel = columns[0].label;
+    const header = document.querySelector(`th.sortable[data-column="${currentColumnLabel}"]`);
+    if (!header) return;
+
+    if (currentSort.column !== currentColumnLabel || currentSort.direction !== 'desc') {
+        currentSort.column = null;
+        currentSort.direction = 'desc';
+        sortTable(currentColumnLabel, header);
+    }
 }
 
 function renderHighlights(data) {

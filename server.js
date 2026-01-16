@@ -80,21 +80,27 @@ function saveWarHistory(items) {
 function loadMemberHistory() {
     try {
         if (!fs.existsSync(MEMBERS_FILE)) {
-            return [];
+            return { items: [], seededAt: null };
         }
         const content = fs.readFileSync(MEMBERS_FILE, 'utf8');
         const data = JSON.parse(content);
-        return Array.isArray(data.items) ? data.items : [];
+        if (Array.isArray(data)) {
+            return { items: data, seededAt: null };
+        }
+        return {
+            items: Array.isArray(data.items) ? data.items : [],
+            seededAt: data.seededAt || null
+        };
     } catch (error) {
         console.warn('⚠️  Failed to load member history. Starting fresh.');
-        return [];
+        return { items: [], seededAt: null };
     }
 }
 
-function saveMemberHistory(items) {
+function saveMemberHistory(items, seededAt) {
     try {
         ensureDataDir();
-        fs.writeFileSync(MEMBERS_FILE, JSON.stringify({ items }, null, 2), 'utf8');
+        fs.writeFileSync(MEMBERS_FILE, JSON.stringify({ seededAt, items }, null, 2), 'utf8');
     } catch (error) {
         console.warn('⚠️  Failed to save member history.');
     }
@@ -102,29 +108,34 @@ function saveMemberHistory(items) {
 
 function attachMemberHistory(memberList) {
     const now = new Date().toISOString();
-    const history = loadMemberHistory();
+    const historyData = loadMemberHistory();
+    const history = historyData.items;
     const historyMap = new Map(history.map(item => [item.tag, item]));
-    const defaultFirstSeen = history.length ? now : '2000-01-01T00:00:00.000Z';
+    const isFirstRun = history.length === 0 && !historyData.seededAt;
+    const seededAt = historyData.seededAt || (isFirstRun ? now : null);
 
     const enriched = memberList.map(member => {
         const existing = historyMap.get(member.tag);
-        const firstSeen = existing?.firstSeen || defaultFirstSeen;
+        const firstSeen = existing?.firstSeen || now;
+        const tenureKnown = existing?.tenureKnown ?? !isFirstRun;
         historyMap.set(member.tag, {
             tag: member.tag,
             firstSeen,
             lastSeen: now,
             name: member.name,
-            role: member.role
+            role: member.role,
+            tenureKnown
         });
-        return { ...member, firstSeen, isCurrent: true };
+        return { ...member, firstSeen, tenureKnown, isCurrent: true };
     });
 
-    saveMemberHistory(Array.from(historyMap.values()));
+    saveMemberHistory(Array.from(historyMap.values()), seededAt);
     return enriched;
 }
 
 function getMemberHistoryList(currentMembers) {
-    const history = loadMemberHistory();
+    const historyData = loadMemberHistory();
+    const history = historyData.items;
     const currentMap = new Map(currentMembers.map(member => [member.tag, member]));
 
     const formerMembers = history
@@ -134,6 +145,7 @@ function getMemberHistoryList(currentMembers) {
             name: item.name || item.tag,
             role: item.role || 'member',
             firstSeen: item.firstSeen,
+            tenureKnown: item.tenureKnown ?? false,
             isCurrent: false
         }));
 
@@ -184,7 +196,9 @@ const mimeTypes = {
     '.html': 'text/html',
     '.js': 'text/javascript',
     '.css': 'text/css',
-    '.json': 'application/json'
+    '.json': 'application/json',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon'
 };
 
 // Serve static files
