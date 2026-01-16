@@ -132,6 +132,20 @@ th {
 }
 
 th.sortable {
+    white-space: normal;
+    line-height: 1.2;
+    max-width: 180px;
+}
+
+td {
+    word-break: break-word;
+}
+
+table {
+    table-layout: fixed;
+}
+
+th.sortable {
     cursor: pointer;
     user-select: none;
     transition: background-color 0.2s;

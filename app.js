@@ -22,6 +22,9 @@ const RECENT_JOIN_DAYS = 7;
 const MAX_WEEKS_DISPLAY = 260; // 5 years
 const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
+// Optional override for the current war label
+const CURRENT_WAR_LABEL = 'Current War - Season 128 Week 2 (1/15/2026-1/18/2026)';
+
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
     // Try to load data on page load
@@ -247,6 +250,7 @@ function processWarData(members, warLog) {
 
     // Create a map of all players
     const playersMap = new Map();
+    const playersByName = new Map();
 
     // Initialize all players with empty scores
     members.forEach(member => {
@@ -258,6 +262,7 @@ function processWarData(members, warLog) {
             isCurrent: member.isCurrent !== false,
             scores: {}
         });
+        playersByName.set(member.name.toLowerCase(), playersMap.get(member.tag));
     });
 
     // Process war log - each item represents a war
@@ -298,6 +303,10 @@ function processWarData(members, warLog) {
         endDate: war.endDateObj
     }));
 
+    if (columns.length && CURRENT_WAR_LABEL) {
+        columns[0].label = CURRENT_WAR_LABEL;
+    }
+
     // Initialize all players with 0 for each date column
     columns.forEach(column => {
         playersMap.forEach(player => {
@@ -310,8 +319,13 @@ function processWarData(members, warLog) {
         const dateLabel = war.label || formatWarDate(war.endDateObj.toISOString());
         const participants = war.participants || war.standings || [];
         participants.forEach(participant => {
-            if (playersMap.has(participant.tag)) {
-                const player = playersMap.get(participant.tag);
+            const tag = participant.tag;
+            let player = tag ? playersMap.get(tag) : null;
+            if (!player && participant.name) {
+                const nameKey = participant.name.toLowerCase();
+                player = playersByName.get(nameKey) || null;
+            }
+            if (player) {
                 if (participant.warPoints === null) {
                     player.scores[dateLabel] = null;
                     return;

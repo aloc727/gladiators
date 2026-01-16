@@ -12,7 +12,7 @@ function parseValue(value) {
   return Number.isNaN(num) ? trimmed : num;
 }
 
-function parseDateRange(label, year = 2025) {
+function parseDateRange(label, year = 2026) {
   // Expects format like "1/8 through 1/11"
   const match = label.match(/(\d{1,2}\/\d{1,2})\s+through\s+(\d{1,2}\/\d{1,2})/i);
   if (!match) return null;
