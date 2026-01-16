@@ -24,11 +24,17 @@ const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label
 const CURRENT_WAR_LABEL = 'Current War - Season 128 Week 2 (1/15/2026-1/18/2026)';
+const UI_VERSION = 'v1.1.1';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
     // Try to load data on page load
     loadData();
+
+    const versionEl = document.getElementById('uiVersion');
+    if (versionEl) {
+        versionEl.textContent = `UI ${UI_VERSION}`;
+    }
     
     // Start auto-refresh (always enabled for public site)
     scheduleNextRefresh();

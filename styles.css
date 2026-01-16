@@ -48,6 +48,12 @@ h1 {
     margin-top: 5px;
 }
 
+.version-tag {
+    color: #64748b;
+    font-size: 0.85em;
+    margin-top: 4px;
+}
+
 .brand {
     display: flex;
     align-items: center;

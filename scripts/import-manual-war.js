@@ -105,15 +105,19 @@ function parseManualCsv(lines) {
 }
 
 function upsert(entries, historyItems) {
+  const labelKeys = entries.map(entry => entry.labelKey);
+  const filtered = historyItems.filter(item => {
+    if (!item.label) return true;
+    return !labelKeys.some(key => item.label.startsWith(key));
+  });
+
+  historyItems.length = 0;
+  historyItems.push(...filtered);
+
   entries.forEach(entry => {
     const endDate = toIsoDate(entry.end);
     const createdDate = toIsoDate(entry.start);
-    const existingIndex = historyItems.findIndex(item => {
-      if (item.label && entry.labelKey && item.label.startsWith(entry.labelKey)) {
-        return true;
-      }
-      return item.endDate === endDate;
-    });
+    const existingIndex = historyItems.findIndex(item => item.endDate === endDate);
     const record = {
       label: entry.label,
       createdDate,
