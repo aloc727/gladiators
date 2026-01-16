@@ -54,6 +54,7 @@ function parseManualCsv(lines) {
 
   const current = {
     label: `${currentLabel} (${currentDateRange.start}-${currentDateRange.end})`,
+    labelKey: currentLabel,
     start: currentDateRange.start,
     end: currentDateRange.end,
     participants: []
@@ -61,6 +62,7 @@ function parseManualCsv(lines) {
 
   const prior = {
     label: `${priorLabel} (${priorDateRange.start}-${priorDateRange.end})`,
+    labelKey: priorLabel,
     start: priorDateRange.start,
     end: priorDateRange.end,
     participants: []
@@ -106,7 +108,12 @@ function upsert(entries, historyItems) {
   entries.forEach(entry => {
     const endDate = toIsoDate(entry.end);
     const createdDate = toIsoDate(entry.start);
-    const existingIndex = historyItems.findIndex(item => item.endDate === endDate);
+    const existingIndex = historyItems.findIndex(item => {
+      if (item.label && entry.labelKey && item.label.startsWith(entry.labelKey)) {
+        return true;
+      }
+      return item.endDate === endDate;
+    });
     const record = {
       label: entry.label,
       createdDate,
