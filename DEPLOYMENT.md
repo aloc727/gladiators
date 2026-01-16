@@ -53,6 +53,11 @@ This project is now Netlify-ready using **Netlify Functions**:
 - That means IP whitelisting **won't work reliably**
 - You should either **remove the IP restriction** or use a host with a **static IP**
 
+**Important about storage**:
+- Netlify Functions have **ephemeral storage**
+- The simple JSON history file will **not persist**
+- If you need historical data, use a host with a **persistent disk**
+
 #### Netlify Setup (High-Level)
 
 1. Push this repo to GitHub

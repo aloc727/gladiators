@@ -6,45 +6,64 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: radial-gradient(circle at top, #2a69ff 0%, #12306a 45%, #0b1a36 100%);
     min-height: 100vh;
     padding: 20px;
-    color: #333;
+    color: #1f2937;
 }
 
 .container {
     max-width: 1400px;
     margin: 0 auto;
-    background: white;
+    background: #f7f9ff;
     border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 10px 40px rgba(6, 24, 67, 0.35);
     padding: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 header {
     text-align: center;
     margin-bottom: 30px;
     padding-bottom: 20px;
-    border-bottom: 2px solid #e0e0e0;
+    border-bottom: 2px solid #d7dcf1;
 }
 
 h1 {
-    color: #667eea;
+    color: #2c54c7;
     font-size: 2.5em;
     margin-bottom: 10px;
 }
 
 .clan-tag {
-    color: #666;
+    color: #4b5563;
     font-size: 1.1em;
     margin-bottom: 5px;
 }
 
 .last-updated {
-    color: #888;
+    color: #6b7280;
     font-size: 0.95em;
     font-style: italic;
     margin-top: 5px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.brand-logo {
+    width: 64px;
+    height: 64px;
+}
+
+.brand-text {
+    text-align: left;
 }
 
 .controls {
@@ -57,7 +76,7 @@ h1 {
 
 .next-refresh {
     font-size: 14px;
-    color: #667eea;
+    color: #2c54c7;
     font-weight: 500;
 }
 
@@ -100,7 +119,7 @@ table {
 }
 
 thead {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #2a69ff 0%, #203a87 100%);
     color: white;
 }
 
@@ -148,7 +167,7 @@ tbody tr:hover {
 }
 
 tbody tr:nth-child(even) {
-    background-color: #fafafa;
+    background-color: #f2f5ff;
 }
 
 tbody tr:nth-child(even):hover {
@@ -168,7 +187,7 @@ td:first-child {
 td:not(:first-child) {
     text-align: center;
     font-weight: 600;
-    color: #667eea;
+    color: #203a87;
 }
 
 .error {
@@ -178,6 +197,245 @@ td:not(:first-child) {
     border-radius: 6px;
     margin-top: 20px;
     border-left: 4px solid #c33;
+}
+
+.highlights {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.highlight-card {
+    background: #ffffff;
+    border: 1px solid #e1e6fb;
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 2px 10px rgba(32, 58, 135, 0.12);
+    text-align: left;
+}
+
+.highlight-card h4 {
+    color: #2c54c7;
+    margin-bottom: 8px;
+    font-size: 1.05em;
+}
+
+.highlight-card p {
+    color: #4b5563;
+    margin: 0;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.legend-item {
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #1f2937;
+    border: 1px solid #d7dcf1;
+}
+
+.legend-green {
+    background: #e6f7ef;
+    color: #1f7a4d;
+    border-color: #b7ebd1;
+}
+
+.legend-yellow {
+    background: #fff7e6;
+    color: #9c6b08;
+    border-color: #ffe2b8;
+}
+
+.legend-red {
+    background: #ffecec;
+    color: #b42318;
+    border-color: #f4b4b4;
+}
+
+.legend-na {
+    background: #eef2f7;
+    color: #475569;
+    border-color: #d7dde6;
+}
+
+.tabs {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 10px 0 18px;
+    flex-wrap: wrap;
+}
+
+.tab-button {
+    border: 1px solid #d7dcf1;
+    background: #ffffff;
+    color: #2c54c7;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+    background: #eef2ff;
+}
+
+.tab-button.active {
+    background: #2c54c7;
+    color: #ffffff;
+    border-color: #2c54c7;
+}
+
+.member-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #475569;
+    background: #ffffff;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid #d7dcf1;
+}
+
+.member-toggle input {
+    width: 16px;
+    height: 16px;
+}
+
+.player-tag {
+    display: none;
+    margin-left: 6px;
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.name-cell:hover .player-tag {
+    display: inline-block;
+}
+
+.former-member {
+    opacity: 0.75;
+}
+
+.promotion-ready {
+    color: #1f7a4d;
+    font-weight: 700;
+}
+
+.promotion-badge {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    background: #e6f7ef;
+    color: #1f7a4d;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.info-icon {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    color: #64748b;
+    border: 1px solid #cbd5f5;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    line-height: 14px;
+    text-align: center;
+    cursor: help;
+}
+
+.role-pill {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #e9edff;
+    color: #2c54c7;
+    text-transform: capitalize;
+}
+
+.name-recent {
+    color: #1f5eff;
+    font-weight: 700;
+}
+
+.name-new-tag {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    background: #ffe7c2;
+    color: #8a5a00;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.score-green {
+    color: #1f7a4d;
+    background: #e6f7ef;
+}
+
+.score-yellow {
+    color: #9c6b08;
+    background: #fff7e6;
+}
+
+.score-red {
+    color: #b42318;
+    background: #ffecec;
+}
+
+.score-na {
+    color: #475569;
+    font-style: italic;
+    background: #eef2f7;
+}
+
+.score-cell {
+    border-radius: 6px;
+}
+
+.info-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.info-card {
+    background: #f8f9ff;
+    border: 1px solid #e6e8f5;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.08);
+}
+
+.info-card h3 {
+    color: #5a67d8;
+    font-size: 1.05em;
+    margin-bottom: 8px;
+}
+
+.info-card p {
+    color: #555;
+    line-height: 1.4;
+    font-size: 0.95em;
 }
 
 @media (max-width: 768px) {

@@ -59,6 +59,7 @@ A website to display weekly war battle scores for clan members using the Clash R
 - Modern, responsive design
 - Automatic data refresh capability
  - Auto-refresh every 5 minutes with countdown timer
+- Local historical storage (JSON file) when war log endpoint is disabled (up to 5 years)
 
 ## API Endpoints Used
 
@@ -81,6 +82,7 @@ A website to display weekly war battle scores for clan members using the Clash R
 - The Clash Royale API requires authentication via Bearer token
 - API rate limits apply (check your API key limits)
 - War log endpoint is currently disabled by Clash Royale API; the app uses river race data as a fallback
+- Local history is stored in `data/war-history.json` (not committed to git)
 - The server runs on port 3000 by default (change in `server.js` if needed)
 
 ## Netlify Deployment

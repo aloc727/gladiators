@@ -4,15 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gladiators Clan War Stats</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Gladiators Clan War Stats</h1>
-            <p class="clan-tag">Clan Tag: #2CPPJLJ</p>
+            <div class="brand">
+                <img src="logo.svg" alt="Gladiators logo" class="brand-logo">
+                <div class="brand-text">
+                    <h1>Gladiators Clan War Stats</h1>
+                    <p class="clan-tag">Clan Tag: #2CPPJLJ</p>
+                </div>
+            </div>
             <p class="last-updated" id="lastUpdated">Updated as of: --</p>
         </header>
+
+        <section class="highlights" id="highlights"></section>
+
+        <div class="legend">
+            <span class="legend-item legend-green">1600+ (On Track)</span>
+            <span class="legend-item legend-yellow">800–1599 (Needs Push)</span>
+            <span class="legend-item legend-red">0–799 (At Risk)</span>
+            <span class="legend-item legend-na">N/A (New This Week)</span>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" data-view="recent">Recent (Last 2 Months)</button>
+            <button class="tab-button" data-view="all">All Time</button>
+            <label class="member-toggle">
+                <input type="checkbox" id="currentMembersOnly" checked>
+                Show current members only
+            </label>
+        </div>
         
         <div class="controls">
             <div class="loading" id="loading" style="display: none;">Loading...</div>
@@ -34,6 +58,21 @@
         </div>
         
         <div id="errorMessage" class="error" style="display: none;"></div>
+
+        <section class="info-section">
+            <div class="info-card">
+                <h3>How This Updates</h3>
+                <p>The site auto-refreshes every 5 minutes and shows the latest war points. Clan wars end Sundays at 4:30am CT.</p>
+            </div>
+            <div class="info-card">
+                <h3>Data Source</h3>
+                <p>Official Clash Royale API. While the war log endpoint is down, we use the current river race data and build history locally.</p>
+            </div>
+            <div class="info-card">
+                <h3>War Requirements</h3>
+                <p>Weekly requirement is <strong>1600</strong>. New members show <strong>N/A</strong> for past weeks; non-participation shows <strong>0</strong>.</p>
+            </div>
+        </section>
     </div>
     
     <script src="app.js"></script>

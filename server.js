@@ -24,6 +24,13 @@ const PORT = process.env.PORT || 3000;
 const CLAN_TAG = '2CPPJLJ';
 const API_BASE_URL = 'api.clashroyale.com';
 
+// Local storage for war history (simple JSON file, no external service)
+const DATA_DIR = path.join(__dirname, 'data');
+const HISTORY_FILE = path.join(DATA_DIR, 'war-history.json');
+const HISTORY_MAX_WEEKS = 260;
+const MEMBERS_FILE = path.join(DATA_DIR, 'members.json');
+const WARLOG_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily check
+
 // SECURITY: API Key MUST be set via environment variable only
 // NEVER hardcode API keys in source code!
 const API_KEY = process.env.CLASH_ROYALE_API_KEY || '';
@@ -40,6 +47,137 @@ if (!API_KEY || !isValidApiKey(API_KEY)) {
     console.warn('   Or set environment variable: export CLASH_ROYALE_API_KEY=your-key-here');
     console.warn('   Using DEMO MODE with sample data.\n');
 }
+
+function ensureDataDir() {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+}
+
+function loadWarHistory() {
+    try {
+        if (!fs.existsSync(HISTORY_FILE)) {
+            return [];
+        }
+        const content = fs.readFileSync(HISTORY_FILE, 'utf8');
+        const data = JSON.parse(content);
+        return Array.isArray(data.items) ? data.items : [];
+    } catch (error) {
+        console.warn('⚠️  Failed to load war history. Starting fresh.');
+        return [];
+    }
+}
+
+function saveWarHistory(items) {
+    try {
+        ensureDataDir();
+        fs.writeFileSync(HISTORY_FILE, JSON.stringify({ items }, null, 2), 'utf8');
+    } catch (error) {
+        console.warn('⚠️  Failed to save war history.');
+    }
+}
+
+function loadMemberHistory() {
+    try {
+        if (!fs.existsSync(MEMBERS_FILE)) {
+            return [];
+        }
+        const content = fs.readFileSync(MEMBERS_FILE, 'utf8');
+        const data = JSON.parse(content);
+        return Array.isArray(data.items) ? data.items : [];
+    } catch (error) {
+        console.warn('⚠️  Failed to load member history. Starting fresh.');
+        return [];
+    }
+}
+
+function saveMemberHistory(items) {
+    try {
+        ensureDataDir();
+        fs.writeFileSync(MEMBERS_FILE, JSON.stringify({ items }, null, 2), 'utf8');
+    } catch (error) {
+        console.warn('⚠️  Failed to save member history.');
+    }
+}
+
+function attachMemberHistory(memberList) {
+    const now = new Date().toISOString();
+    const history = loadMemberHistory();
+    const historyMap = new Map(history.map(item => [item.tag, item]));
+    const defaultFirstSeen = history.length ? now : '2000-01-01T00:00:00.000Z';
+
+    const enriched = memberList.map(member => {
+        const existing = historyMap.get(member.tag);
+        const firstSeen = existing?.firstSeen || defaultFirstSeen;
+        historyMap.set(member.tag, {
+            tag: member.tag,
+            firstSeen,
+            lastSeen: now,
+            name: member.name,
+            role: member.role
+        });
+        return { ...member, firstSeen, isCurrent: true };
+    });
+
+    saveMemberHistory(Array.from(historyMap.values()));
+    return enriched;
+}
+
+function getMemberHistoryList(currentMembers) {
+    const history = loadMemberHistory();
+    const currentMap = new Map(currentMembers.map(member => [member.tag, member]));
+
+    const formerMembers = history
+        .filter(item => !currentMap.has(item.tag))
+        .map(item => ({
+            tag: item.tag,
+            name: item.name || item.tag,
+            role: item.role || 'member',
+            firstSeen: item.firstSeen,
+            isCurrent: false
+        }));
+
+    return currentMembers.concat(formerMembers);
+}
+
+function getWarEntryKey(entry) {
+    return entry.endDate || entry.createdDate || '';
+}
+
+function upsertWarEntry(entry, history) {
+    const key = getWarEntryKey(entry);
+    if (!key) return history;
+
+    const existingIndex = history.findIndex(item => getWarEntryKey(item) === key);
+    if (existingIndex >= 0) {
+        history[existingIndex] = entry;
+    } else {
+        history.push(entry);
+    }
+
+    // Sort newest first
+    history.sort((a, b) => new Date(b.endDate || b.createdDate) - new Date(a.endDate || a.createdDate));
+
+    // Keep a maximum of HISTORY_MAX_WEEKS entries
+    const trimmed = history.slice(0, HISTORY_MAX_WEEKS);
+    saveWarHistory(trimmed);
+    return trimmed;
+}
+
+function mergeWarLogs(primary, secondary) {
+    const combined = [...primary];
+    secondary.forEach(entry => {
+        const key = getWarEntryKey(entry);
+        if (!combined.find(item => getWarEntryKey(item) === key)) {
+            combined.push(entry);
+        }
+    });
+    combined.sort((a, b) => new Date(b.endDate || b.createdDate) - new Date(a.endDate || a.createdDate));
+    return combined;
+}
+
+let warHistoryCache = loadWarHistory();
+let warLogAvailable = false;
 
 // MIME types
 const mimeTypes = {
@@ -287,6 +425,54 @@ function setSecurityHeaders(res) {
     res.removeHeader('X-Powered-By');
 }
 
+// Periodically capture current river race data to build history locally
+const HISTORY_CAPTURE_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+function captureCurrentWeek() {
+    if (!API_KEY || !isValidApiKey(API_KEY)) {
+        return;
+    }
+
+    const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
+    makeAPIRequest(riverRaceEndpoint, (err, riverData) => {
+        if (err) {
+            console.warn('⚠️  Failed to capture current river race data.');
+            return;
+        }
+
+        const currentEntries = convertRiverRaceToWarLog(riverData);
+        currentEntries.forEach(entry => {
+            warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+        });
+    });
+}
+
+function checkWarLogAvailability() {
+    if (!API_KEY || !isValidApiKey(API_KEY)) {
+        return;
+    }
+
+    const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
+    makeAPIRequest(warlogEndpoint, (err, data) => {
+        if (!err && data && Array.isArray(data.items)) {
+            if (!warLogAvailable) {
+                console.log('✅ War log endpoint is available again.');
+            }
+            warLogAvailable = true;
+            data.items.forEach(entry => {
+                warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+            });
+            return;
+        }
+
+        const wasAvailable = warLogAvailable;
+        warLogAvailable = false;
+        if (wasAvailable) {
+            console.log('⚠️  War log endpoint appears unavailable. Will keep checking daily.');
+        }
+    });
+}
+
 // Create server
 const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url, true);
@@ -317,8 +503,12 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ members: getDemoMembers() }));
                 }
             } else {
+                const query = parsedUrl.query || {};
+                const includeFormer = query.includeFormer === '1';
+                const enriched = attachMemberHistory(data.memberList || []);
+                const output = includeFormer ? getMemberHistoryList(enriched) : enriched;
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ members: data.memberList || [] }));
+                res.end(JSON.stringify({ members: output }));
             }
         });
         return;
@@ -347,10 +537,15 @@ const server = http.createServer((req, res) => {
                                 res.end(JSON.stringify({ warLog: getDemoWarLog() }));
                             }
                         } else {
-                            // Convert current river race to war log format
-                            const warLog = convertRiverRaceToWarLog(riverData);
+                            // Convert current river race to war log format and store it
+                            const currentEntries = convertRiverRaceToWarLog(riverData);
+                            currentEntries.forEach(entry => {
+                                warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+                            });
+
+                            const combined = mergeWarLogs(currentEntries, warHistoryCache);
                             res.writeHead(200, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ warLog: warLog }));
+                            res.end(JSON.stringify({ warLog: combined.slice(0, 10) }));
                         }
                     });
                 } else {
@@ -363,8 +558,12 @@ const server = http.createServer((req, res) => {
                     }
                 }
             } else {
+                const items = data.items || [];
+                items.forEach(entry => {
+                    warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+                });
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ warLog: data.items || [] }));
+                res.end(JSON.stringify({ warLog: items.slice(0, 10) }));
             }
         });
         return;
@@ -403,4 +602,12 @@ server.listen(PORT, () => {
         console.log('   - Use environment variables for all secrets');
         console.log('   - Enable rate limiting\n');
     }
+
+    // Start background capture to build local history
+    captureCurrentWeek();
+    setInterval(captureCurrentWeek, HISTORY_CAPTURE_INTERVAL_MS);
+
+    // Check once per day if war log endpoint is back
+    checkWarLogAvailability();
+    setInterval(checkWarLogAvailability, WARLOG_CHECK_INTERVAL_MS);
 });
