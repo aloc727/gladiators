@@ -29,6 +29,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'war-history.json');
 const HISTORY_MAX_WEEKS = 260;
 const MEMBERS_FILE = path.join(DATA_DIR, 'members.json');
+const SNAPSHOTS_FILE = path.join(DATA_DIR, 'war-snapshots.json');
 const WARLOG_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily check
 
 // SECURITY: API Key MUST be set via environment variable only
@@ -104,6 +105,61 @@ function saveMemberHistory(items, seededAt) {
     } catch (error) {
         console.warn('⚠️  Failed to save member history.');
     }
+}
+
+function loadSnapshots() {
+    try {
+        if (!fs.existsSync(SNAPSHOTS_FILE)) {
+            return { weeks: {} };
+        }
+        const content = fs.readFileSync(SNAPSHOTS_FILE, 'utf8');
+        const data = JSON.parse(content);
+        return data && typeof data === 'object' ? data : { weeks: {} };
+    } catch (error) {
+        console.warn('⚠️  Failed to load snapshots. Starting fresh.');
+        return { weeks: {} };
+    }
+}
+
+function saveSnapshots(data) {
+    try {
+        ensureDataDir();
+        fs.writeFileSync(SNAPSHOTS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (error) {
+        console.warn('⚠️  Failed to save snapshots.');
+    }
+}
+
+function getCentralTimeParts(date = new Date()) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+    const parts = formatter.formatToParts(date);
+    const hour = Number(parts.find(p => p.type === 'hour')?.value || 0);
+    const minute = Number(parts.find(p => p.type === 'minute')?.value || 0);
+    return { hour, minute };
+}
+
+function getCurrentSundayKey() {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const daysSinceSunday = currentDay === 0 ? 0 : currentDay;
+    const currentSunday = new Date(now);
+    currentSunday.setDate(now.getDate() - daysSinceSunday);
+    currentSunday.setHours(4, 30, 0, 0);
+    return currentSunday.toISOString();
+}
+
+function normalizeParticipants(participants = []) {
+    return participants.map(p => ({
+        tag: p.tag,
+        warPoints: p.warPoints ?? p.fame ?? 0,
+        battlesPlayed: p.battlesPlayed ?? p.decksUsed ?? 0,
+        decksUsed: p.decksUsed ?? p.battlesPlayed ?? 0
+    }));
 }
 
 function attachMemberHistory(memberList) {
@@ -296,11 +352,7 @@ function convertRiverRaceToWarLog(riverRaceData) {
     currentSunday.setHours(4, 30, 0, 0);
     
     // Convert participants to war log format
-    const participants = riverRaceData.clan.participants.map(p => ({
-        tag: p.tag,
-        warPoints: p.fame || 0, // Fame is the war points in river race
-        battlesPlayed: p.decksUsed || 0
-    }));
+    const participants = normalizeParticipants(riverRaceData.clan.participants);
     
     // Return as a single war entry (current week)
     return [{
@@ -454,10 +506,55 @@ function captureCurrentWeek() {
             return;
         }
 
-        const currentEntries = convertRiverRaceToWarLog(riverData);
+            const currentEntries = convertRiverRaceToWarLog(riverData);
         currentEntries.forEach(entry => {
+                if (entry.participants) {
+                    entry.participants = normalizeParticipants(entry.participants);
+                }
             warHistoryCache = upsertWarEntry(entry, warHistoryCache);
         });
+    });
+}
+
+function captureWarSnapshotsWindow() {
+    if (!API_KEY || !isValidApiKey(API_KEY)) {
+        return;
+    }
+
+    const { hour, minute } = getCentralTimeParts();
+    if (hour !== 4 || minute < 25 || minute > 31) {
+        return;
+    }
+
+    const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
+    makeAPIRequest(riverRaceEndpoint, (err, riverData) => {
+        if (err || !riverData?.clan?.participants) {
+            console.warn('⚠️  Snapshot capture failed.');
+            return;
+        }
+
+        const participants = normalizeParticipants(riverData.clan.participants);
+        const weekKey = getCurrentSundayKey();
+        const timestamp = new Date().toISOString();
+
+        const snapshots = loadSnapshots();
+        if (!snapshots.weeks[weekKey]) {
+            snapshots.weeks[weekKey] = { samples: [], preReset: null };
+        }
+
+        const totalFame = participants.reduce((sum, p) => sum + (p.warPoints || 0), 0);
+        const sample = { timestamp, totalFame, participants };
+        snapshots.weeks[weekKey].samples.push(sample);
+
+        // If data resets to zero, keep the last non-zero sample as preReset
+        if (totalFame === 0) {
+            const previous = snapshots.weeks[weekKey].samples.slice(-2, -1)[0];
+            if (previous && previous.totalFame > 0) {
+                snapshots.weeks[weekKey].preReset = previous;
+            }
+        }
+
+        saveSnapshots(snapshots);
     });
 }
 
@@ -474,6 +571,9 @@ function checkWarLogAvailability() {
             }
             warLogAvailable = true;
             data.items.forEach(entry => {
+                if (entry.participants) {
+                    entry.participants = normalizeParticipants(entry.participants);
+                }
                 warHistoryCache = upsertWarEntry(entry, warHistoryCache);
             });
             return;
@@ -572,7 +672,12 @@ const server = http.createServer((req, res) => {
                     }
                 }
             } else {
-                const items = data.items || [];
+                const items = (data.items || []).map(item => {
+                    if (item.participants) {
+                        item.participants = normalizeParticipants(item.participants);
+                    }
+                    return item;
+                });
                 items.forEach(entry => {
                     warHistoryCache = upsertWarEntry(entry, warHistoryCache);
                 });
@@ -624,4 +729,8 @@ server.listen(PORT, () => {
     // Check once per day if war log endpoint is back
     checkWarLogAvailability();
     setInterval(checkWarLogAvailability, WARLOG_CHECK_INTERVAL_MS);
+
+    // Capture minute-by-minute snapshots around week rollover (4:25–4:31am CT)
+    captureWarSnapshotsWindow();
+    setInterval(captureWarSnapshotsWindow, 60 * 1000);
 });
