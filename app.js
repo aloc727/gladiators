@@ -987,13 +987,44 @@ function renderDashboard() {
     const momentumTarget = 190000;
     const momentumPercent = Math.min(totalPoints / momentumTarget, 1);
     const minimumPercent = Math.min(totalPoints / requiredMinimum, 1);
+    const tickStops = [
+        { label: '0', percent: 0 },
+        { label: '80k', percent: requiredMinimum / momentumTarget },
+        { label: '190k', percent: 1 }
+    ];
+    const tickLines = tickStops.map(stop => {
+        const angle = -180 + (stop.percent * 180);
+        return `
+            <g transform="rotate(${angle} 110 100)">
+                <line x1="110" y1="24" x2="110" y2="36" stroke="#94a3b8" stroke-width="2" />
+            </g>
+        `;
+    }).join('');
+    const tickLabels = tickStops.map(stop => {
+        const angle = -180 + (stop.percent * 180);
+        const radians = (angle * Math.PI) / 180;
+        const radius = 92;
+        const x = 110 + radius * Math.cos(radians);
+        const y = 100 + radius * Math.sin(radians);
+        return `<text x="${x}" y="${y}" text-anchor="middle" class="momentum-label">${stop.label}</text>`;
+    }).join('');
     strategyEl.innerHTML = `
         <h3>Momentum & Strategy</h3>
         <div class="momentum-widget">
-            <div class="momentum-gauge" style="--percent: ${momentumPercent};">
-                <span class="momentum-tick" style="--tick: 0;">0</span>
-                <span class="momentum-tick" style="--tick: ${requiredMinimum / momentumTarget};">80k</span>
-                <span class="momentum-tick" style="--tick: 1;">190k</span>
+            <div class="momentum-gauge">
+                <svg viewBox="0 0 220 120" role="img" aria-label="Momentum gauge">
+                    <defs>
+                        <linearGradient id="momentumGradient" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#ef4444"/>
+                            <stop offset="55%" stop-color="#f59e0b"/>
+                            <stop offset="100%" stop-color="#22c55e"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M20 100 A90 90 0 0 1 200 100" fill="none" stroke="#e2e8f0" stroke-width="14" stroke-linecap="round" pathLength="100"/>
+                    <path d="M20 100 A90 90 0 0 1 200 100" fill="none" stroke="url(#momentumGradient)" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="${momentumPercent * 100} 100"/>
+                    ${tickLines}
+                    ${tickLabels}
+                </svg>
             </div>
             <div class="momentum-metrics">
                 <div class="momentum-value">${formatNumber(totalPoints)} total points</div>

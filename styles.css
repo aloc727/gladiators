@@ -732,49 +732,19 @@ td:not(:first-child) {
 }
 
 .momentum-gauge {
-    --percent: 0.4;
-    width: 180px;
-    height: 90px;
-    border-radius: 180px 180px 0 0;
-    background: conic-gradient(from 180deg, #ef4444 0deg, #f59e0b 90deg, #22c55e 180deg);
-    position: relative;
-    overflow: visible;
+    width: 220px;
+    height: 120px;
 }
 
-.momentum-gauge::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: conic-gradient(from 180deg,
-        #ef4444 0deg,
-        #f59e0b 90deg,
-        #22c55e calc(var(--percent) * 180deg),
-        #e5e7eb calc(var(--percent) * 180deg),
-        #e5e7eb 180deg);
+.momentum-gauge svg {
+    width: 100%;
+    height: 100%;
 }
 
-.momentum-gauge::after {
-    content: "";
-    position: absolute;
-    inset: 10px 10px 0 10px;
-    background: #f7f9ff;
-    border-radius: 180px 180px 0 0;
-}
-
-.momentum-tick {
-    position: absolute;
-    left: 50%;
-    bottom: 0;
-    transform-origin: bottom center;
-    transform: rotate(calc(-90deg + (var(--tick) * 180deg))) translateY(-84px) translateX(-50%);
-    font-size: 11px;
-    font-weight: 600;
-    color: #64748b;
-    z-index: 2;
-    background: #f7f9ff;
-    padding: 2px 6px;
-    border-radius: 999px;
-    border: 1px solid #e2e8f0;
+.momentum-label {
+    font-size: 10px;
+    font-weight: 700;
+    fill: #64748b;
 }
 
 .momentum-metrics {
