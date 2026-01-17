@@ -6,12 +6,15 @@
     <title>Gladiators Clan War Stats</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Slab:wght@600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header>
             <div class="brand">
-                <img src="/logo.svg?v=3" alt="Gladiators logo" class="brand-logo">
+                <img src="/logo-cr.png?v=1" alt="Clash Royale logo" class="brand-logo" onerror="this.src='/logo.svg?v=3'">
                 <div class="brand-text">
                     <h1>Gladiators Clan War Stats</h1>
                     <p class="clan-tag">Clan Tag: #2CPPJLJ</p>
@@ -35,9 +38,16 @@
             <p class="last-updated" id="lastUpdated">Updated as of: --</p>
         </header>
 
-        <div class="primary-tabs">
-            <button class="primary-tab active" data-tab="table">War Table</button>
-            <button class="primary-tab" data-tab="summary">Summary</button>
+        <div class="menu-bar">
+            <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="menu-tabs" id="menuTabs">
+                <button class="menu-tab active" data-tab="table">War Table</button>
+                <button class="menu-tab" data-tab="summary">Summary</button>
+            </nav>
         </div>
 
         <section class="tab-panel active" id="tab-table">
@@ -89,6 +99,17 @@
                 <div class="dashboard-card" id="strategyBoard"></div>
             </section>
 
+            <section class="summary-tables">
+                <div class="summary-card">
+                    <h3>Most Improved (Last Week)</h3>
+                    <div class="summary-table" id="improvementTable"></div>
+                </div>
+                <div class="summary-card">
+                    <h3>Leaderboard (Last 3 Months)</h3>
+                    <div class="summary-table" id="leaderboardTable"></div>
+                </div>
+            </section>
+
             <section class="info-section">
                 <div class="info-card">
                     <h3>How This Updates</h3>
@@ -106,7 +127,7 @@
         </section>
 
         <footer class="site-footer">
-            <span class="version-tag" id="uiVersion">UI v1.2.0</span>
+            <span class="version-tag" id="uiVersion">UI v1.3.0</span>
         </footer>
     </div>
     

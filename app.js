@@ -25,7 +25,7 @@ const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label
 const CURRENT_WAR_LABEL = 'Current War - Season 128 Week 2 (1/15/2026-1/18/2026)';
-const UI_VERSION = 'v1.3.0';
+const UI_VERSION = 'v1.3.1';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -46,14 +46,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Primary tab switching
-    document.querySelectorAll('.primary-tab').forEach(button => {
+    const menuTabs = document.getElementById('menuTabs');
+    document.querySelectorAll('.menu-tab').forEach(button => {
         button.addEventListener('click', () => {
-            document.querySelectorAll('.primary-tab').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.menu-tab').forEach(b => b.classList.remove('active'));
             button.classList.add('active');
             currentTab = button.dataset.tab;
             renderTabVisibility();
+            if (menuTabs) {
+                menuTabs.classList.remove('open');
+            }
         });
     });
+
+    const menuToggle = document.getElementById('menuToggle');
+    if (menuToggle && menuTabs) {
+        menuToggle.addEventListener('click', () => {
+            menuTabs.classList.toggle('open');
+        });
+    }
 
     // Range switching
     document.querySelectorAll('.range-tab').forEach(button => {
@@ -783,7 +794,7 @@ function getDemotionThreshold() {
     }
 
     // Monday 4:30am CT and later -> 1600 threshold
-    if (day >= 1 && (day > 1 || minutes >= cutoff)) {
+    if (day === 1 && minutes >= cutoff) {
         return 1600;
     }
 
@@ -796,6 +807,8 @@ function renderDashboard() {
     const promotionEl = document.getElementById('promotionBoard');
     const demotionEl = document.getElementById('demotionBoard');
     const strategyEl = document.getElementById('strategyBoard');
+    const improvementEl = document.getElementById('improvementTable');
+    const leaderboardEl = document.getElementById('leaderboardTable');
 
     if (!clanStatsEl || !promotionEl || !demotionEl || !strategyEl) return;
 
@@ -848,7 +861,26 @@ function renderDashboard() {
         }))
         .filter(item => !Number.isNaN(item.delta))
         .sort((a, b) => b.delta - a.delta)
-        .slice(0, 3) : [];
+        .slice(0, 5) : [];
+
+    const leaderboardColumns = allColumns.slice(0, 12);
+    const leaderboard = leaderboardColumns.length ? players
+        .map(player => {
+            const scores = leaderboardColumns
+                .map(col => player.scores[col.label])
+                .filter(score => score !== null && score !== undefined);
+            const total = scores.reduce((sum, score) => sum + score, 0);
+            const weeks = scores.length;
+            return {
+                name: player.name,
+                total,
+                average: weeks ? Math.round(total / weeks) : 0,
+                weeks
+            };
+        })
+        .filter(entry => entry.weeks > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10) : [];
 
     clanStatsEl.innerHTML = `
         <h3>Clan War Snapshot</h3>
@@ -889,6 +921,50 @@ function renderDashboard() {
             ${improvements.length ? `<br><br>Most improved vs last week: ${improvements.map(p => `${p.name} (+${p.delta})`).join(', ')}.` : ''}
         </p>
     `;
+
+    if (improvementEl) {
+        improvementEl.innerHTML = improvements.length ? `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${improvements.map(player => `
+                        <tr>
+                            <td>${player.name}</td>
+                            <td>${player.delta >= 0 ? `+${player.delta}` : player.delta}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        ` : '<p>No week-over-week data yet.</p>';
+    }
+
+    if (leaderboardEl) {
+        leaderboardEl.innerHTML = leaderboard.length ? `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Total</th>
+                        <th>Avg</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${leaderboard.map(player => `
+                        <tr>
+                            <td>${player.name}</td>
+                            <td>${player.total}</td>
+                            <td>${player.average}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        ` : '<p>No recent history yet.</p>';
+    }
 }
 
 // Update the "Updated as of" timestamp
