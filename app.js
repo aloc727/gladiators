@@ -325,7 +325,43 @@ function processWarData(members, warLog) {
         }
     }
 
-    const columns = sortedWars.map(war => ({
+    const mergedWarsMap = new Map();
+    sortedWars.forEach(war => {
+        const key = war.endDateObj.toISOString().split('T')[0];
+        const participants = war.participants || war.standings || [];
+        if (!mergedWarsMap.has(key)) {
+            mergedWarsMap.set(key, { ...war, participants: [...participants] });
+            return;
+        }
+
+        const existing = mergedWarsMap.get(key);
+        existing.label = existing.label || war.label;
+        const combined = [...(existing.participants || []), ...participants];
+        const byKey = new Map();
+        combined.forEach(participant => {
+            const participantKey = participant.tag || participant.name;
+            if (!participantKey) return;
+            const prev = byKey.get(participantKey);
+            if (!prev) {
+                byKey.set(participantKey, { ...participant });
+                return;
+            }
+            const prevPoints = prev.warPoints ?? prev.fame ?? 0;
+            const nextPoints = participant.warPoints ?? participant.fame ?? 0;
+            const merged = nextPoints > prevPoints ? { ...prev, ...participant } : { ...participant, ...prev };
+            const prevDecks = prev.decksUsed ?? prev.battlesPlayed ?? 0;
+            const nextDecks = participant.decksUsed ?? participant.battlesPlayed ?? 0;
+            if (nextDecks > prevDecks) {
+                merged.decksUsed = participant.decksUsed ?? participant.battlesPlayed ?? merged.decksUsed;
+            }
+            byKey.set(participantKey, merged);
+        });
+        existing.participants = Array.from(byKey.values());
+    });
+
+    const mergedWars = Array.from(mergedWarsMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
+
+    const columns = mergedWars.map(war => ({
         label: war.label || formatWarDate(war.endDateObj.toISOString()),
         endDate: war.endDateObj
     }));
@@ -343,7 +379,7 @@ function processWarData(members, warLog) {
     });
 
     // Update scores for participants
-    sortedWars.forEach((war, index) => {
+    mergedWars.forEach((war, index) => {
         const baseLabel = war.label || formatWarDate(war.endDateObj.toISOString());
         const dateLabel = index === 0 && CURRENT_WAR_LABEL ? CURRENT_WAR_LABEL : baseLabel;
         const participants = war.participants || war.standings || [];
