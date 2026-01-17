@@ -738,7 +738,7 @@ td:not(:first-child) {
     border-radius: 180px 180px 0 0;
     background: conic-gradient(from 180deg, #ef4444 0deg, #f59e0b 90deg, #22c55e 180deg);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .momentum-gauge::before {
@@ -759,6 +759,22 @@ td:not(:first-child) {
     inset: 10px 10px 0 10px;
     background: #f7f9ff;
     border-radius: 180px 180px 0 0;
+}
+
+.momentum-tick {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform-origin: bottom center;
+    transform: rotate(calc(-90deg + (var(--tick) * 180deg))) translateY(-84px) translateX(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    z-index: 2;
+    background: #f7f9ff;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
 }
 
 .momentum-metrics {

@@ -983,15 +983,22 @@ function renderDashboard() {
         </ul>
     `;
 
+    const requiredMinimum = 80000;
     const momentumTarget = 190000;
     const momentumPercent = Math.min(totalPoints / momentumTarget, 1);
+    const minimumPercent = Math.min(totalPoints / requiredMinimum, 1);
     strategyEl.innerHTML = `
         <h3>Momentum & Strategy</h3>
         <div class="momentum-widget">
-            <div class="momentum-gauge" style="--percent: ${momentumPercent};"></div>
+            <div class="momentum-gauge" style="--percent: ${momentumPercent};">
+                <span class="momentum-tick" style="--tick: 0;">0</span>
+                <span class="momentum-tick" style="--tick: ${requiredMinimum / momentumTarget};">80k</span>
+                <span class="momentum-tick" style="--tick: 1;">190k</span>
+            </div>
             <div class="momentum-metrics">
-                <div class="momentum-value">${formatNumber(totalPoints)} points</div>
-                <div class="momentum-sub">${Math.round(momentumPercent * 100)}% of 190,000</div>
+                <div class="momentum-value">${formatNumber(totalPoints)} total points</div>
+                <div class="momentum-sub">${Math.round(minimumPercent * 100)}% of 80,000 (required minimum).</div>
+                <div class="momentum-sub">${Math.round(momentumPercent * 100)}% of 190,000 (total possible).</div>
             </div>
         </div>
         <p class="strategy-text">
