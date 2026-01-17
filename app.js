@@ -11,7 +11,8 @@ let countdownTimer = null;
 let nextRefreshTime = null; // Track when the next refresh is scheduled
 
 let latestData = null;
-let currentView = 'recent';
+let currentTab = 'table';
+let currentRange = 'recent';
 let currentMembersOnly = true;
 let userSort = null;
 
@@ -24,7 +25,7 @@ const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label
 const CURRENT_WAR_LABEL = 'Current War - Season 128 Week 2 (1/15/2026-1/18/2026)';
-const UI_VERSION = 'v1.2.0';
+const UI_VERSION = 'v1.3.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -44,12 +45,22 @@ document.addEventListener('DOMContentLoaded', () => {
         clearAutoRefresh();
     });
 
-    // Tab switching
-    document.querySelectorAll('.tab-button').forEach(button => {
+    // Primary tab switching
+    document.querySelectorAll('.primary-tab').forEach(button => {
         button.addEventListener('click', () => {
-            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.primary-tab').forEach(b => b.classList.remove('active'));
             button.classList.add('active');
-            currentView = button.dataset.view;
+            currentTab = button.dataset.tab;
+            renderTabVisibility();
+        });
+    });
+
+    // Range switching
+    document.querySelectorAll('.range-tab').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.range-tab').forEach(b => b.classList.remove('active'));
+            button.classList.add('active');
+            currentRange = button.dataset.range;
             renderView();
         });
     });
@@ -65,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         memberToggle.addEventListener('change', (e) => {
             currentMembersOnly = e.target.checked;
             localStorage.setItem('currentMembersOnly', currentMembersOnly);
-            loadData();
+            renderView();
         });
     }
 });
@@ -73,9 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // Schedule the next automatic refresh
 function scheduleNextRefresh() {
     clearAutoRefresh();
-    
-    // Calculate when the next refresh should happen
-    nextRefreshTime = Date.now() + AUTO_REFRESH_INTERVAL;
+    const now = Date.now();
+    const delay = AUTO_REFRESH_INTERVAL - (now % AUTO_REFRESH_INTERVAL);
+    // Calculate when the next refresh should happen (5-minute boundary)
+    nextRefreshTime = now + delay;
     
     // Update countdown display immediately
     updateCountdown();
@@ -85,7 +97,7 @@ function scheduleNextRefresh() {
     autoRefreshTimer = setTimeout(() => {
         loadData();
         scheduleNextRefresh(); // Schedule the next one
-    }, AUTO_REFRESH_INTERVAL);
+    }, delay);
 }
 
 // Clear auto-refresh timers
@@ -204,7 +216,7 @@ async function fetchWarLog() {
     return data.warLog || [];
 }
 
-// Format date for war end (Sunday at 4:30am CT)
+// Format date for war end (Monday at 4:30am CT)
 function formatWarDate(dateString) {
     if (!dateString) return 'Unknown Date';
     
@@ -218,7 +230,7 @@ function formatWarDate(dateString) {
     return `${month}/${day}/${year}`;
 }
 
-// Get the Sunday date for a war (wars end Sunday at 4:30am CT)
+// Get the Monday date for a war (wars end Monday at 4:30am CT)
 function getWarEndDate(war) {
     // Try different possible date fields from the API
     const dateString = war.endDate || war.createdDate || war.seasonId || null;
@@ -227,25 +239,21 @@ function getWarEndDate(war) {
         // Fallback: calculate based on current date
         const now = new Date();
         const currentDay = now.getDay();
-        const daysSinceSunday = currentDay === 0 ? 0 : currentDay;
-        const mostRecentSunday = new Date(now);
-        mostRecentSunday.setDate(now.getDate() - daysSinceSunday);
-        // Set to 4:30am CT (CT is UTC-6 or UTC-5, but we'll use local time for display)
-        mostRecentSunday.setHours(4, 30, 0, 0);
-        return mostRecentSunday;
+        const daysUntilMonday = (1 - currentDay + 7) % 7;
+        const endMonday = new Date(now);
+        endMonday.setDate(now.getDate() + daysUntilMonday);
+        endMonday.setHours(4, 30, 0, 0);
+        return endMonday;
     }
     
     const date = new Date(dateString);
     
-    // If the date is not a Sunday, find the previous Sunday
+    // Find the next Monday for the war end
     const dayOfWeek = date.getDay();
-    if (dayOfWeek !== 0) {
-        const daysToSubtract = dayOfWeek;
-        date.setDate(date.getDate() - daysToSubtract);
-    }
-    
-    // Set to 4:30am (the API date should already account for timezone)
-    // We're just using it for the date display, so the time doesn't matter much
+    const daysUntilMonday = (1 - dayOfWeek + 7) % 7;
+    date.setDate(date.getDate() + daysUntilMonday);
+
+    // Set to 4:30am CT for display
     date.setHours(4, 30, 0, 0);
     
     return date;
@@ -512,7 +520,8 @@ function renderTable(data) {
 
         // Role
         const roleCell = document.createElement('td');
-        roleCell.innerHTML = `<span class="role-pill">${formatRole(player.role)}</span>`;
+        const roleClass = `role-pill role-${(player.role || 'member').toLowerCase()}`;
+        roleCell.innerHTML = `<span class="${roleClass}">${formatRole(player.role)}</span>`;
         row.appendChild(roleCell);
 
         // Current rank
@@ -658,7 +667,7 @@ function formatRole(role) {
 
 
 function getVisibleColumns(columns) {
-    if (currentView === 'all') {
+    if (currentRange === 'all') {
         return columns;
     }
     return columns.slice(0, RECENT_WEEKS_DISPLAY);
@@ -668,13 +677,14 @@ function renderView() {
     if (!latestData) return;
     const columns = getVisibleColumns(latestData.columns);
     const viewData = {
-        players: latestData.players,
+        players: latestData.players.filter(player => (currentMembersOnly ? player.isCurrent : true)),
         columns
     };
     renderTable(viewData);
     applySavedSortOrDefault(viewData.columns);
     renderHighlights(viewData);
     renderDashboard();
+    renderTabVisibility();
 }
 
 function applySavedSortOrDefault(columns) {
@@ -692,6 +702,21 @@ function applySavedSortOrDefault(columns) {
     if (header) {
         sortTable(currentColumnLabel, header, 'desc');
     }
+}
+
+function renderTabVisibility() {
+    const tablePanel = document.getElementById('tab-table');
+    const summaryPanel = document.getElementById('tab-summary');
+    if (!tablePanel || !summaryPanel) return;
+
+    if (currentTab === 'summary') {
+        summaryPanel.classList.add('active');
+        tablePanel.classList.remove('active');
+        return;
+    }
+
+    summaryPanel.classList.remove('active');
+    tablePanel.classList.add('active');
 }
 
 function renderHighlights(data) {
@@ -731,6 +756,40 @@ function renderHighlights(data) {
     `;
 }
 
+function getCentralTimeInfo() {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago',
+        weekday: 'short',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false
+    }).formatToParts(new Date());
+
+    const weekday = parts.find(part => part.type === 'weekday')?.value || 'Sun';
+    const hour = parseInt(parts.find(part => part.type === 'hour')?.value || '0', 10);
+    const minute = parseInt(parts.find(part => part.type === 'minute')?.value || '0', 10);
+    const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return { day: weekdayMap[weekday] ?? 0, hour, minute };
+}
+
+function getDemotionThreshold() {
+    const { day, hour, minute } = getCentralTimeInfo();
+    const minutes = hour * 60 + minute;
+    const cutoff = 4 * 60 + 30;
+
+    // Sunday 4:30am CT through Monday 4:29am CT -> 700 point threshold
+    if ((day === 0 && minutes >= cutoff) || (day === 1 && minutes < cutoff)) {
+        return 700;
+    }
+
+    // Monday 4:30am CT and later -> 1600 threshold
+    if (day >= 1 && (day > 1 || minutes >= cutoff)) {
+        return 1600;
+    }
+
+    return null;
+}
+
 function renderDashboard() {
     if (!latestData?.columns?.length) return;
     const clanStatsEl = document.getElementById('clanStats');
@@ -742,7 +801,6 @@ function renderDashboard() {
 
     const allColumns = latestData.columns;
     const currentColumn = allColumns[0];
-    const last12 = allColumns.slice(0, 12);
     const players = latestData.players.filter(player => currentMembersOnly ? player.isCurrent : true);
 
     const currentScores = players.map(player => ({
@@ -757,7 +815,7 @@ function renderDashboard() {
     const avgPoints = participants.length ? Math.round(totalPoints / participants.length) : 0;
     const totalDecks = participants.reduce((sum, item) => sum + (item.decks || 0), 0);
     const onTrack = participants.filter(item => item.score >= WAR_REQUIREMENT).length;
-    const needsPush = participants.filter(item => item.score >= WARNING_THRESHOLD && item.score < WAR_REQUIREMENT).length;
+    const needsNudge = participants.filter(item => item.score >= WARNING_THRESHOLD && item.score < WAR_REQUIREMENT).length;
     const atRisk = participants.filter(item => item.score < WARNING_THRESHOLD).length;
     const participationRate = players.length ? Math.round((participants.length / players.length) * 100) : 0;
     const pointsNeeded = participants.reduce((sum, item) => sum + Math.max(0, WAR_REQUIREMENT - item.score), 0);
@@ -766,20 +824,21 @@ function renderDashboard() {
         .filter(player => player.promotionReady)
         .slice(0, 8);
 
-    const demotionList = players
+    const demotionThreshold = getDemotionThreshold();
+    const demotionList = demotionThreshold ? players
         .filter(player => {
             const role = (player.role || '').toLowerCase();
             if (role !== 'member' && role !== 'elder') return false;
-            if (last12.some(col => player.scores[col.label] === null || player.scores[col.label] === undefined)) {
-                return false;
-            }
-            return last12.some(col => player.scores[col.label] < WAR_REQUIREMENT);
+            const score = player.scores[currentColumn.label];
+            if (score === null || score === undefined) return false;
+            return score < demotionThreshold;
         })
-        .map(player => {
-            const lowest = Math.min(...last12.map(col => player.scores[col.label]));
-            return { name: player.name, role: player.role, lowest };
-        })
-        .slice(0, 8);
+        .map(player => ({
+            name: player.name,
+            role: player.role,
+            score: player.scores[currentColumn.label]
+        }))
+        .slice(0, 8) : [];
 
     const previousColumn = allColumns[1];
     const improvements = previousColumn ? players
@@ -799,7 +858,7 @@ function renderDashboard() {
             <div class="stat-item">Average Points: <strong>${avgPoints}</strong></div>
             <div class="stat-item">Decks Used: <strong>${totalDecks}</strong></div>
             <div class="stat-item">On Track (1600+): <strong>${onTrack}</strong></div>
-            <div class="stat-item">Needs Push (800-1599): <strong>${needsPush}</strong></div>
+            <div class="stat-item">Needs Nudge (800-1599): <strong>${needsNudge}</strong></div>
             <div class="stat-item">At Risk (0-799): <strong>${atRisk}</strong></div>
             <div class="stat-item">Points Needed to Reach 1600: <strong>${pointsNeeded}</strong></div>
         </div>
@@ -817,9 +876,9 @@ function renderDashboard() {
     demotionEl.innerHTML = `
         <h3>Demotion Watch</h3>
         <ul class="list">
-            ${demotionList.length ? demotionList.map(player => `
-                <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">Low: ${player.lowest}</span></li>
-            `).join('') : '<li class="list-item">No one flagged in last 12 weeks.</li>'}
+            ${demotionThreshold ? (demotionList.length ? demotionList.map(player => `
+                <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">${player.score} pts</span></li>
+            `).join('') : '<li class="list-item">No one flagged for this checkpoint.</li>') : '<li class="list-item">Demotion watch begins Sunday 4:30am CT.</li>'}
         </ul>
     `;
 

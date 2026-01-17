@@ -133,24 +133,27 @@ function saveSnapshots(data) {
 function getCentralTimeParts(date = new Date()) {
     const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/Chicago',
+        weekday: 'short',
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
     });
     const parts = formatter.formatToParts(date);
+    const weekday = parts.find(p => p.type === 'weekday')?.value || 'Sun';
     const hour = Number(parts.find(p => p.type === 'hour')?.value || 0);
     const minute = Number(parts.find(p => p.type === 'minute')?.value || 0);
-    return { hour, minute };
+    const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return { day: weekdayMap[weekday] ?? 0, hour, minute };
 }
 
-function getCurrentSundayKey() {
+function getCurrentWarEndKey() {
     const now = new Date();
     const currentDay = now.getDay();
-    const daysSinceSunday = currentDay === 0 ? 0 : currentDay;
-    const currentSunday = new Date(now);
-    currentSunday.setDate(now.getDate() - daysSinceSunday);
-    currentSunday.setHours(4, 30, 0, 0);
-    return currentSunday.toISOString();
+    const daysUntilMonday = (1 - currentDay + 7) % 7;
+    const endMonday = new Date(now);
+    endMonday.setDate(now.getDate() + daysUntilMonday);
+    endMonday.setHours(4, 30, 0, 0);
+    return endMonday.toISOString();
 }
 
 function normalizeParticipants(participants = []) {
@@ -246,6 +249,11 @@ function mergeWarLogs(primary, secondary) {
 
 let warHistoryCache = loadWarHistory();
 let warLogAvailable = false;
+let memberCache = { current: [], all: [] };
+let warLogCache = [];
+let lastCacheRefresh = null;
+
+const SERVER_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes on the dot
 
 // MIME types
 const mimeTypes = {
@@ -299,15 +307,15 @@ function getDemoWarLog() {
     const members = getDemoMembers();
     const weeks = [];
     
-    // Calculate dates for the last 10 Sundays at 4:30am CT
+    // Calculate dates for the last 10 Mondays at 4:30am CT
     const now = new Date();
     const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const daysSinceSunday = currentDay === 0 ? 0 : currentDay;
+    const daysUntilMonday = (1 - currentDay + 7) % 7;
     
-    // Get the most recent Sunday at 4:30am CT
-    const mostRecentSunday = new Date(now);
-    mostRecentSunday.setDate(now.getDate() - daysSinceSunday);
-    mostRecentSunday.setHours(4, 30, 0, 0); // 4:30am CT
+    // Get the most recent Monday at 4:30am CT
+    const mostRecentMonday = new Date(now);
+    mostRecentMonday.setDate(now.getDate() + daysUntilMonday);
+    mostRecentMonday.setHours(4, 30, 0, 0); // 4:30am CT
     
     for (let week = 0; week < 10; week++) {
         const participants = [];
@@ -322,14 +330,14 @@ function getDemoWarLog() {
             });
         }
         
-        // Calculate the Sunday date for this week (going back in time)
-        const warDate = new Date(mostRecentSunday);
-        warDate.setDate(mostRecentSunday.getDate() - (week * 7));
+        // Calculate the Monday date for this week (going back in time)
+        const warDate = new Date(mostRecentMonday);
+        warDate.setDate(mostRecentMonday.getDate() - (week * 7));
         
         weeks.push({
             participants: participants,
             createdDate: warDate.toISOString(),
-            endDate: warDate.toISOString() // War ends on Sunday at 4:30am CT
+            endDate: warDate.toISOString() // War ends on Monday at 4:30am CT
         });
     }
     
@@ -343,13 +351,13 @@ function convertRiverRaceToWarLog(riverRaceData) {
         return [];
     }
     
-    // Get current date (Sunday at 4:30am CT)
+    // Get current date (Monday at 4:30am CT)
     const now = new Date();
     const currentDay = now.getDay();
-    const daysSinceSunday = currentDay === 0 ? 0 : currentDay;
-    const currentSunday = new Date(now);
-    currentSunday.setDate(now.getDate() - daysSinceSunday);
-    currentSunday.setHours(4, 30, 0, 0);
+    const daysUntilMonday = (1 - currentDay + 7) % 7;
+    const currentMonday = new Date(now);
+    currentMonday.setDate(now.getDate() + daysUntilMonday);
+    currentMonday.setHours(4, 30, 0, 0);
     
     // Convert participants to war log format
     const participants = normalizeParticipants(riverRaceData.clan.participants);
@@ -357,8 +365,8 @@ function convertRiverRaceToWarLog(riverRaceData) {
     // Return as a single war entry (current week)
     return [{
         participants: participants,
-        createdDate: currentSunday.toISOString(),
-        endDate: currentSunday.toISOString(),
+        createdDate: currentMonday.toISOString(),
+        endDate: currentMonday.toISOString(),
         state: riverRaceData.state || 'unknown'
     }];
 }
@@ -473,6 +481,92 @@ function makeAPIRequest(endpoint, callback) {
     req.end();
 }
 
+function makeAPIRequestPromise(endpoint) {
+    return new Promise((resolve, reject) => {
+        makeAPIRequest(endpoint, (err, data) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+            resolve(data);
+        });
+    });
+}
+
+async function refreshServerCache() {
+    const now = new Date();
+
+    if (!API_KEY || !isValidApiKey(API_KEY)) {
+        memberCache.current = getDemoMembers();
+        memberCache.all = memberCache.current;
+        warLogCache = getDemoWarLog();
+        lastCacheRefresh = now.toISOString();
+        return;
+    }
+
+    try {
+        const clanData = await makeAPIRequestPromise(`/v1/clans/%23${CLAN_TAG}`);
+        const enriched = attachMemberHistory(clanData.memberList || []);
+        memberCache.current = enriched;
+        memberCache.all = getMemberHistoryList(enriched);
+    } catch (error) {
+        console.warn('⚠️  Cache refresh failed for members.');
+    }
+
+    try {
+        const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
+        const data = await makeAPIRequestPromise(warlogEndpoint);
+        const items = (data.items || []).map(item => {
+            if (item.participants) {
+                item.participants = normalizeParticipants(item.participants);
+            }
+            return item;
+        });
+        items.forEach(entry => {
+            warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+        });
+        warLogAvailable = true;
+        const combined = mergeWarLogs(items, warHistoryCache);
+        warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
+    } catch (error) {
+        warLogAvailable = false;
+        if (error.message.includes('disabled') || error.message.includes('notFound')) {
+            try {
+                const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
+                const riverData = await makeAPIRequestPromise(riverRaceEndpoint);
+                const currentEntries = convertRiverRaceToWarLog(riverData);
+                currentEntries.forEach(entry => {
+                    if (entry.participants) {
+                        entry.participants = normalizeParticipants(entry.participants);
+                    }
+                    warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+                });
+                const combined = mergeWarLogs(currentEntries, warHistoryCache);
+                warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
+            } catch (riverError) {
+                console.warn('⚠️  Cache refresh failed for river race.');
+            }
+        } else {
+            console.warn('⚠️  Cache refresh failed for war log.');
+        }
+    }
+
+    if (!warLogCache.length) {
+        warLogCache = getDemoWarLog();
+    }
+
+    lastCacheRefresh = now.toISOString();
+}
+
+function scheduleCacheRefresh() {
+    const now = Date.now();
+    const delay = SERVER_REFRESH_INTERVAL_MS - (now % SERVER_REFRESH_INTERVAL_MS);
+    setTimeout(async () => {
+        await refreshServerCache();
+        scheduleCacheRefresh();
+    }, delay);
+}
+
 // SECURITY: Set security headers
 function setSecurityHeaders(res) {
     // CORS - restrict to localhost in production, or specific domain
@@ -521,8 +615,8 @@ function captureWarSnapshotsWindow() {
         return;
     }
 
-    const { hour, minute } = getCentralTimeParts();
-    if (hour !== 4 || minute < 25 || minute > 31) {
+    const { day, hour, minute } = getCentralTimeParts();
+    if (day !== 1 || hour !== 4 || minute < 25 || minute > 31) {
         return;
     }
 
@@ -534,7 +628,7 @@ function captureWarSnapshotsWindow() {
         }
 
         const participants = normalizeParticipants(riverData.clan.participants);
-        const weekKey = getCurrentSundayKey();
+        const weekKey = getCurrentWarEndKey();
         const timestamp = new Date().toISOString();
 
         const snapshots = loadSnapshots();
@@ -604,87 +698,19 @@ const server = http.createServer((req, res) => {
     
     // API endpoints
     if (pathname === '/api/clan/members') {
-        const endpoint = `/v1/clans/%23${CLAN_TAG}`;
-        makeAPIRequest(endpoint, (err, data) => {
-            if (err) {
-                if (API_KEY && isValidApiKey(API_KEY)) {
-                    // Only show error if API key is set (otherwise we're in demo mode)
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: err.message }));
-                } else {
-                    // No valid API key - return demo data
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ members: getDemoMembers() }));
-                }
-            } else {
-                const query = parsedUrl.query || {};
-                const includeFormer = query.includeFormer === '1';
-                const enriched = attachMemberHistory(data.memberList || []);
-                const output = includeFormer ? getMemberHistoryList(enriched) : enriched;
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ members: output }));
-            }
-        });
+        const query = parsedUrl.query || {};
+        const includeFormer = query.includeFormer === '1';
+        const output = includeFormer ? memberCache.all : memberCache.current;
+        const fallback = getDemoMembers();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ members: output.length ? output : fallback }));
         return;
     }
     
     if (pathname === '/api/clan/warlog') {
-        // Try warlog endpoint first (may be disabled)
-        const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
-        makeAPIRequest(warlogEndpoint, (err, data) => {
-            if (err) {
-                // If warlog fails, try current river race as fallback
-                if (err.message.includes('disabled') || err.message.includes('notFound')) {
-                    console.log('War log endpoint disabled, trying current river race...');
-                    const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
-                    makeAPIRequest(riverRaceEndpoint, (riverErr, riverData) => {
-                        if (riverErr) {
-                            if (API_KEY && isValidApiKey(API_KEY)) {
-                                res.writeHead(500, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ 
-                                    error: 'War log endpoint is disabled. Current river race data unavailable.',
-                                    note: 'The Clash Royale API has temporarily disabled the war log endpoint.'
-                                }));
-                            } else {
-                                // No valid API key - return demo data
-                                res.writeHead(200, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ warLog: getDemoWarLog() }));
-                            }
-                        } else {
-                            // Convert current river race to war log format and store it
-                            const currentEntries = convertRiverRaceToWarLog(riverData);
-                            currentEntries.forEach(entry => {
-                                warHistoryCache = upsertWarEntry(entry, warHistoryCache);
-                            });
-
-                            const combined = mergeWarLogs(currentEntries, warHistoryCache);
-                            res.writeHead(200, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ warLog: combined.slice(0, 10) }));
-                        }
-                    });
-                } else {
-                    if (API_KEY && isValidApiKey(API_KEY)) {
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: err.message }));
-                    } else {
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ warLog: getDemoWarLog() }));
-                    }
-                }
-            } else {
-                const items = (data.items || []).map(item => {
-                    if (item.participants) {
-                        item.participants = normalizeParticipants(item.participants);
-                    }
-                    return item;
-                });
-                items.forEach(entry => {
-                    warHistoryCache = upsertWarEntry(entry, warHistoryCache);
-                });
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ warLog: items.slice(0, 10) }));
-            }
-        });
+        const output = warLogCache.length ? warLogCache : getDemoWarLog();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ warLog: output }));
         return;
     }
     
@@ -722,6 +748,10 @@ server.listen(PORT, () => {
         console.log('   - Enable rate limiting\n');
     }
 
+    // Refresh cached data on 5-minute boundaries (not per user request)
+    refreshServerCache();
+    scheduleCacheRefresh();
+
     // Start background capture to build local history
     captureCurrentWeek();
     setInterval(captureCurrentWeek, HISTORY_CAPTURE_INTERVAL_MS);
@@ -730,7 +760,7 @@ server.listen(PORT, () => {
     checkWarLogAvailability();
     setInterval(checkWarLogAvailability, WARLOG_CHECK_INTERVAL_MS);
 
-    // Capture minute-by-minute snapshots around week rollover (4:25–4:31am CT)
+    // Capture minute-by-minute snapshots around week rollover (Monday 4:25–4:31am CT)
     captureWarSnapshotsWindow();
     setInterval(captureWarSnapshotsWindow, 60 * 1000);
 });

@@ -35,66 +35,79 @@
             <p class="last-updated" id="lastUpdated">Updated as of: --</p>
         </header>
 
-        <section class="highlights" id="highlights"></section>
+        <div class="primary-tabs">
+            <button class="primary-tab active" data-tab="table">War Table</button>
+            <button class="primary-tab" data-tab="summary">Summary</button>
+        </div>
 
-        <section class="dashboard">
-            <div class="dashboard-card" id="clanStats"></div>
-            <div class="dashboard-card" id="promotionBoard"></div>
-            <div class="dashboard-card" id="demotionBoard"></div>
-            <div class="dashboard-card" id="strategyBoard"></div>
+        <section class="tab-panel active" id="tab-table">
+            <div class="legend">
+                <span class="legend-item legend-green">1600+ (On Track)</span>
+                <span class="legend-item legend-yellow">800–1599 (Needs Nudge)</span>
+                <span class="legend-item legend-red">0–799 (At Risk)</span>
+                <span class="legend-item legend-na">N/A (New This Week)</span>
+            </div>
+
+            <div class="tabs">
+                <button class="range-tab active" data-range="recent">Recent (Last 2 Months)</button>
+                <button class="range-tab" data-range="all">All Time</button>
+                <label class="member-toggle">
+                    <input type="checkbox" id="currentMembersOnly" checked>
+                    Show current members only
+                </label>
+            </div>
+            
+            <div class="controls">
+                <div class="loading" id="loading" style="display: none;">Loading...</div>
+                <span class="next-refresh" id="nextRefresh">Next refresh in: --</span>
+            </div>
+            
+            <div class="table-container" id="tableView">
+                <table id="statsTable">
+                    <thead id="tableHead">
+                        <tr>
+                            <th class="sortable" data-column="player">Player Name</th>
+                            <!-- Week columns will be dynamically added here -->
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Data will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="errorMessage" class="error" style="display: none;"></div>
         </section>
 
-        <div class="legend">
-            <span class="legend-item legend-green">1600+ (On Track)</span>
-            <span class="legend-item legend-yellow">800–1599 (Needs Push)</span>
-            <span class="legend-item legend-red">0–799 (At Risk)</span>
-            <span class="legend-item legend-na">N/A (New This Week)</span>
-        </div>
+        <section class="tab-panel" id="tab-summary">
+            <section class="highlights" id="highlights"></section>
 
-        <div class="tabs">
-            <button class="tab-button active" data-view="recent">Recent (Last 2 Months)</button>
-            <button class="tab-button" data-view="all">All Time</button>
-            <label class="member-toggle">
-                <input type="checkbox" id="currentMembersOnly" checked>
-                Show current members only
-            </label>
-        </div>
-        
-        <div class="controls">
-            <div class="loading" id="loading" style="display: none;">Loading...</div>
-            <span class="next-refresh" id="nextRefresh">Next refresh in: --</span>
-        </div>
-        
-        <div class="table-container">
-            <table id="statsTable">
-                <thead id="tableHead">
-                    <tr>
-                        <th class="sortable" data-column="player">Player Name</th>
-                        <!-- Week columns will be dynamically added here -->
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <!-- Data will be dynamically added here -->
-                </tbody>
-            </table>
-        </div>
-        
-        <div id="errorMessage" class="error" style="display: none;"></div>
+            <section class="dashboard">
+                <div class="dashboard-card" id="clanStats"></div>
+                <div class="dashboard-card" id="promotionBoard"></div>
+                <div class="dashboard-card" id="demotionBoard"></div>
+                <div class="dashboard-card" id="strategyBoard"></div>
+            </section>
 
-        <section class="info-section">
-            <div class="info-card">
-                <h3>How This Updates</h3>
-                <p>The site auto-refreshes every 5 minutes and shows the latest war points. Clan wars end Sundays at 4:30am CT.</p>
-            </div>
-            <div class="info-card">
-                <h3>Data Source</h3>
-                <p>Official Clash Royale API. While the war log endpoint is down, we use the current river race data and build history locally.</p>
-            </div>
-            <div class="info-card">
-                <h3>War Requirements</h3>
-                <p>Weekly requirement is <strong>1600</strong>. New members show <strong>N/A</strong> for past weeks; non-participation shows <strong>0</strong>.</p>
-            </div>
+            <section class="info-section">
+                <div class="info-card">
+                    <h3>How This Updates</h3>
+                    <p>The site auto-refreshes every 5 minutes and shows the latest war points. Clan wars end Monday at 4:30am CT.</p>
+                </div>
+                <div class="info-card">
+                    <h3>Data Source</h3>
+                    <p>Official Clash Royale API. While the war log endpoint is down, we use the current river race data and build history locally.</p>
+                </div>
+                <div class="info-card">
+                    <h3>War Requirements</h3>
+                    <p>Weekly requirement is <strong>1600</strong>. New members show <strong>N/A</strong> for past weeks; non-participation shows <strong>0</strong>.</p>
+                </div>
+            </section>
         </section>
+
+        <footer class="site-footer">
+            <span class="version-tag" id="uiVersion">UI v1.2.0</span>
+        </footer>
     </div>
     
     <script src="app.js"></script>

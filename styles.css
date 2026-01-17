@@ -389,6 +389,45 @@ td:not(:first-child) {
     border-color: #d7dde6;
 }
 
+.primary-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 12px 0 18px;
+    flex-wrap: wrap;
+}
+
+.primary-tab {
+    border: 1px solid #cbd5f5;
+    background: rgba(255, 255, 255, 0.85);
+    color: #243b8f;
+    padding: 10px 18px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(36, 59, 143, 0.15);
+}
+
+.primary-tab:hover {
+    background: #eef2ff;
+}
+
+.primary-tab.active {
+    background: #243b8f;
+    color: #ffffff;
+    border-color: #243b8f;
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
 .tabs {
     display: flex;
     justify-content: center;
@@ -397,7 +436,7 @@ td:not(:first-child) {
     flex-wrap: wrap;
 }
 
-.tab-button {
+.range-tab {
     border: 1px solid #d7dcf1;
     background: #ffffff;
     color: #2c54c7;
@@ -409,11 +448,11 @@ td:not(:first-child) {
     transition: all 0.2s ease;
 }
 
-.tab-button:hover {
+.range-tab:hover {
     background: #eef2ff;
 }
 
-.tab-button.active {
+.range-tab.active {
     background: #2c54c7;
     color: #ffffff;
     border-color: #2c54c7;
@@ -492,6 +531,26 @@ td:not(:first-child) {
     text-transform: capitalize;
 }
 
+.role-leader {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.role-coleader {
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.role-elder {
+    background: #ede9fe;
+    color: #5b21b6;
+}
+
+.role-member {
+    background: #e2e8f0;
+    color: #334155;
+}
+
 .name-recent {
     color: #1f5eff;
     font-weight: 700;
@@ -560,6 +619,22 @@ td:not(:first-child) {
     font-size: 0.95em;
 }
 
+.site-footer {
+    margin-top: 28px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+}
+
+.version-tag {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.8);
+}
+
 @media (max-width: 768px) {
     .container {
         padding: 15px;
@@ -568,9 +643,44 @@ td:not(:first-child) {
     h1 {
         font-size: 1.8em;
     }
+
+    header {
+        text-align: center;
+    }
+
+    .brand {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .hero-art {
+        display: none;
+    }
+
+    .primary-tabs,
+    .tabs {
+        gap: 8px;
+    }
+    
+    .primary-tab {
+        width: 100%;
+        max-width: 240px;
+    }
     
     th, td {
         padding: 8px;
         font-size: 0.9em;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .highlights,
+    .dashboard,
+    .info-section {
+        grid-template-columns: 1fr;
     }
 }
