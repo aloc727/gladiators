@@ -22,10 +22,19 @@ const RECENT_JOIN_DAYS = 7;
 const MAX_WEEKS_DISPLAY = 260; // 5 years
 const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
+// Optional override for the current war label
+const CURRENT_WAR_LABEL = 'Current War - Season 128 Week 2 (1/15/2026-1/18/2026)';
+const UI_VERSION = 'v1.2.0';
+
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
     // Try to load data on page load
     loadData();
+
+    const versionEl = document.getElementById('uiVersion');
+    if (versionEl) {
+        versionEl.textContent = `UI ${UI_VERSION}`;
+    }
     
     // Start auto-refresh (always enabled for public site)
     scheduleNextRefresh();
@@ -247,17 +256,21 @@ function processWarData(members, warLog) {
 
     // Create a map of all players
     const playersMap = new Map();
+    const playersByName = new Map();
 
     // Initialize all players with empty scores
     members.forEach(member => {
-        playersMap.set(member.tag, {
+        const player = {
             name: member.name,
             tag: member.tag,
             role: member.role || 'member',
             firstSeen: member.firstSeen || null,
             isCurrent: member.isCurrent !== false,
-            scores: {}
-        });
+            scores: {},
+            decksUsed: {}
+        };
+        playersMap.set(member.tag, player);
+        playersByName.set(member.name.toLowerCase(), player);
     });
 
     // Process war log - each item represents a war
@@ -298,31 +311,47 @@ function processWarData(members, warLog) {
         endDate: war.endDateObj
     }));
 
+    if (columns.length && CURRENT_WAR_LABEL) {
+        columns[0].label = CURRENT_WAR_LABEL;
+    }
+
     // Initialize all players with 0 for each date column
     columns.forEach(column => {
         playersMap.forEach(player => {
             player.scores[column.label] = 0;
+            player.decksUsed[column.label] = 0;
         });
     });
 
     // Update scores for participants
-    sortedWars.forEach((war) => {
-        const dateLabel = war.label || formatWarDate(war.endDateObj.toISOString());
+    sortedWars.forEach((war, index) => {
+        const baseLabel = war.label || formatWarDate(war.endDateObj.toISOString());
+        const dateLabel = index === 0 && CURRENT_WAR_LABEL ? CURRENT_WAR_LABEL : baseLabel;
         const participants = war.participants || war.standings || [];
         participants.forEach(participant => {
-            if (playersMap.has(participant.tag)) {
-                const player = playersMap.get(participant.tag);
-                if (participant.warPoints === null) {
-                    player.scores[dateLabel] = null;
-                    return;
-                }
-                const warPoints = participant.warPoints ??
-                                 participant.fame ??
-                                 participant.battlesPlayed ??
-                                 participant.wins ??
-                                 0;
-                player.scores[dateLabel] = warPoints;
+            const tag = participant.tag;
+            let player = tag ? playersMap.get(tag) : null;
+            if (!player && participant.name) {
+                player = playersByName.get(participant.name.toLowerCase()) || null;
             }
+            if (!player) return;
+
+            if (participant.warPoints === null) {
+                player.scores[dateLabel] = null;
+                player.decksUsed[dateLabel] = null;
+                return;
+            }
+
+            const warPoints = participant.warPoints ??
+                             participant.fame ??
+                             participant.battlesPlayed ??
+                             participant.wins ??
+                             0;
+            const decksUsed = participant.decksUsed ??
+                             participant.battlesPlayed ??
+                             0;
+            player.scores[dateLabel] = warPoints;
+            player.decksUsed[dateLabel] = decksUsed;
         });
     });
 
@@ -645,6 +674,7 @@ function renderView() {
     renderTable(viewData);
     applySavedSortOrDefault(viewData.columns);
     renderHighlights(viewData);
+    renderDashboard();
 }
 
 function applySavedSortOrDefault(columns) {
@@ -698,6 +728,107 @@ function renderHighlights(data) {
             <h4>Top Performers</h4>
             <p>${topPerformers.map(p => `${p.name} (${p.score})`).join('<br>') || 'No data yet'}</p>
         </div>
+    `;
+}
+
+function renderDashboard() {
+    if (!latestData?.columns?.length) return;
+    const clanStatsEl = document.getElementById('clanStats');
+    const promotionEl = document.getElementById('promotionBoard');
+    const demotionEl = document.getElementById('demotionBoard');
+    const strategyEl = document.getElementById('strategyBoard');
+
+    if (!clanStatsEl || !promotionEl || !demotionEl || !strategyEl) return;
+
+    const allColumns = latestData.columns;
+    const currentColumn = allColumns[0];
+    const last12 = allColumns.slice(0, 12);
+    const players = latestData.players.filter(player => currentMembersOnly ? player.isCurrent : true);
+
+    const currentScores = players.map(player => ({
+        name: player.name,
+        role: player.role,
+        score: player.scores[currentColumn.label],
+        decks: player.decksUsed[currentColumn.label]
+    }));
+
+    const participants = currentScores.filter(item => item.score !== null && item.score !== undefined);
+    const totalPoints = participants.reduce((sum, item) => sum + item.score, 0);
+    const avgPoints = participants.length ? Math.round(totalPoints / participants.length) : 0;
+    const totalDecks = participants.reduce((sum, item) => sum + (item.decks || 0), 0);
+    const onTrack = participants.filter(item => item.score >= WAR_REQUIREMENT).length;
+    const needsPush = participants.filter(item => item.score >= WARNING_THRESHOLD && item.score < WAR_REQUIREMENT).length;
+    const atRisk = participants.filter(item => item.score < WARNING_THRESHOLD).length;
+    const participationRate = players.length ? Math.round((participants.length / players.length) * 100) : 0;
+    const pointsNeeded = participants.reduce((sum, item) => sum + Math.max(0, WAR_REQUIREMENT - item.score), 0);
+
+    const promotionList = players
+        .filter(player => player.promotionReady)
+        .slice(0, 8);
+
+    const demotionList = players
+        .filter(player => {
+            const role = (player.role || '').toLowerCase();
+            if (role !== 'member' && role !== 'elder') return false;
+            if (last12.some(col => player.scores[col.label] === null || player.scores[col.label] === undefined)) {
+                return false;
+            }
+            return last12.some(col => player.scores[col.label] < WAR_REQUIREMENT);
+        })
+        .map(player => {
+            const lowest = Math.min(...last12.map(col => player.scores[col.label]));
+            return { name: player.name, role: player.role, lowest };
+        })
+        .slice(0, 8);
+
+    const previousColumn = allColumns[1];
+    const improvements = previousColumn ? players
+        .map(player => ({
+            name: player.name,
+            delta: (player.scores[currentColumn.label] ?? 0) - (player.scores[previousColumn.label] ?? 0)
+        }))
+        .filter(item => !Number.isNaN(item.delta))
+        .sort((a, b) => b.delta - a.delta)
+        .slice(0, 3) : [];
+
+    clanStatsEl.innerHTML = `
+        <h3>Clan War Snapshot</h3>
+        <div class="stat-grid">
+            <div class="stat-item">Participation: <strong>${participants.length}/${players.length}</strong> (${participationRate}%)</div>
+            <div class="stat-item">Total Points: <strong>${totalPoints}</strong></div>
+            <div class="stat-item">Average Points: <strong>${avgPoints}</strong></div>
+            <div class="stat-item">Decks Used: <strong>${totalDecks}</strong></div>
+            <div class="stat-item">On Track (1600+): <strong>${onTrack}</strong></div>
+            <div class="stat-item">Needs Push (800-1599): <strong>${needsPush}</strong></div>
+            <div class="stat-item">At Risk (0-799): <strong>${atRisk}</strong></div>
+            <div class="stat-item">Points Needed to Reach 1600: <strong>${pointsNeeded}</strong></div>
+        </div>
+    `;
+
+    promotionEl.innerHTML = `
+        <h3>Promotion Ready</h3>
+        <ul class="list">
+            ${promotionList.length ? promotionList.map(player => `
+                <li class="list-item"><span>${player.name}</span><span class="badge badge-promote">1600+ x12</span></li>
+            `).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
+        </ul>
+    `;
+
+    demotionEl.innerHTML = `
+        <h3>Demotion Watch</h3>
+        <ul class="list">
+            ${demotionList.length ? demotionList.map(player => `
+                <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">Low: ${player.lowest}</span></li>
+            `).join('') : '<li class="list-item">No one flagged in last 12 weeks.</li>'}
+        </ul>
+    `;
+
+    strategyEl.innerHTML = `
+        <h3>Momentum & Strategy</h3>
+        <p class="strategy-text">
+            Keep the momentum: <strong>${pointsNeeded}</strong> total points are needed to bring every participant up to the 1600 goal.
+            ${improvements.length ? `<br><br>Most improved vs last week: ${improvements.map(p => `${p.name} (+${p.delta})`).join(', ')}.` : ''}
+        </p>
     `;
 }
 
