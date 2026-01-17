@@ -49,10 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuTabs = document.getElementById('menuTabs');
     document.querySelectorAll('.menu-tab').forEach(button => {
         button.addEventListener('click', () => {
-            document.querySelectorAll('.menu-tab').forEach(b => b.classList.remove('active'));
-            button.classList.add('active');
-            currentTab = button.dataset.tab;
-            renderTabVisibility();
+            setActiveTab(button.dataset.tab);
             if (menuTabs) {
                 menuTabs.classList.remove('open');
             }
@@ -535,6 +532,8 @@ function renderTable(data) {
     // Create data rows
     players.forEach(player => {
         const row = document.createElement('tr');
+        row.dataset.playerTag = player.tag || '';
+        row.dataset.playerName = player.name || '';
 
         // Player name
         const nameCell = document.createElement('td');
@@ -700,6 +699,10 @@ function getRankSortValue(value, direction) {
     return value;
 }
 
+function formatNumber(value) {
+    return Number(value || 0).toLocaleString('en-US');
+}
+
 function getScoreClass(value) {
     if (value >= WAR_REQUIREMENT) return 'score-green';
     if (value >= WARNING_THRESHOLD) return 'score-yellow';
@@ -764,6 +767,33 @@ function renderTabVisibility() {
 
     summaryPanel.classList.remove('active');
     tablePanel.classList.add('active');
+}
+
+function setActiveTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.menu-tab').forEach(button => {
+        button.classList.toggle('active', button.dataset.tab === tab);
+    });
+    renderTabVisibility();
+}
+
+function focusPlayerRow(playerTag, playerName) {
+    const tableBody = document.getElementById('tableBody');
+    if (!tableBody) return;
+
+    setActiveTab('table');
+
+    const rows = Array.from(tableBody.querySelectorAll('tr'));
+    const match = rows.find(row => {
+        if (playerTag && row.dataset.playerTag === playerTag) return true;
+        if (playerName && row.dataset.playerName === playerName) return true;
+        return false;
+    });
+
+    if (!match) return;
+    match.classList.add('row-highlight');
+    match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => match.classList.remove('row-highlight'), 1800);
 }
 
 function renderHighlights(data) {
@@ -890,9 +920,11 @@ function renderDashboard() {
         .slice(0, 8) : [];
 
     const previousColumn = allColumns[1];
+    const playerTagMap = new Map(players.map(player => [player.name, player.tag || '']));
     const improvements = previousColumn ? players
         .map(player => ({
             name: player.name,
+            tag: player.tag || '',
             delta: (player.scores[currentColumn.label] ?? 0) - (player.scores[previousColumn.label] ?? 0)
         }))
         .filter(item => !Number.isNaN(item.delta))
@@ -909,6 +941,7 @@ function renderDashboard() {
             const weeks = scores.length;
             return {
                 name: player.name,
+                tag: player.tag || '',
                 total,
                 average: weeks ? Math.round(total / weeks) : 0,
                 weeks
@@ -950,11 +983,19 @@ function renderDashboard() {
         </ul>
     `;
 
+    const momentumTarget = 190000;
+    const momentumPercent = Math.min(totalPoints / momentumTarget, 1);
     strategyEl.innerHTML = `
         <h3>Momentum & Strategy</h3>
+        <div class="momentum-widget">
+            <div class="momentum-gauge" style="--percent: ${momentumPercent};"></div>
+            <div class="momentum-metrics">
+                <div class="momentum-value">${formatNumber(totalPoints)} points</div>
+                <div class="momentum-sub">${Math.round(momentumPercent * 100)}% of 190,000</div>
+            </div>
+        </div>
         <p class="strategy-text">
-            Keep the momentum: <strong>${pointsNeeded}</strong> total points are needed to bring every participant up to the 1600 goal.
-            ${improvements.length ? `<br><br>Most improved vs last week: ${improvements.map(p => `${p.name} (+${p.delta})`).join(', ')}.` : ''}
+            Keep the momentum: <strong>${formatNumber(pointsNeeded)}</strong> total points are needed to bring every participant up to the 1600 goal.
         </p>
     `;
 
@@ -969,8 +1010,11 @@ function renderDashboard() {
                 </thead>
                 <tbody>
                     ${improvements.map(player => `
-                        <tr>
-                            <td>${player.name}</td>
+                        <tr data-tag="${player.tag}" data-name="${player.name}">
+                            <td class="summary-player">
+                                ${player.name}
+                                ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                            </td>
                             <td>${player.delta >= 0 ? `+${player.delta}` : player.delta}</td>
                         </tr>
                     `).join('')}
@@ -991,8 +1035,11 @@ function renderDashboard() {
                 </thead>
                 <tbody>
                     ${leaderboard.map(player => `
-                        <tr>
-                            <td>${player.name}</td>
+                        <tr data-tag="${player.tag}" data-name="${player.name}">
+                            <td class="summary-player">
+                                ${player.name}
+                                ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                            </td>
                             <td>${player.total}</td>
                             <td>${player.average}</td>
                         </tr>
@@ -1000,6 +1047,22 @@ function renderDashboard() {
                 </tbody>
             </table>
         ` : '<p>No recent history yet.</p>';
+    }
+
+    if (improvementEl) {
+        improvementEl.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', () => {
+                focusPlayerRow(row.dataset.tag, row.dataset.name);
+            });
+        });
+    }
+
+    if (leaderboardEl) {
+        leaderboardEl.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', () => {
+                focusPlayerRow(row.dataset.tag, row.dataset.name);
+            });
+        });
     }
 }
 
