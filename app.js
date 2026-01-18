@@ -23,8 +23,8 @@ const RECENT_JOIN_DAYS = 7;
 const MAX_WEEKS_DISPLAY = 260; // 5 years
 const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
-// Optional override for the current war label
-const CURRENT_WAR_LABEL = 'Current War - Season 128 Week 2 (1/15/2026-1/18/2026)';
+// Optional override for the current war label (leave empty to use data labels)
+const CURRENT_WAR_LABEL = '';
 const UI_VERSION = 'v1.3.1';
 
 // Initialize the app
@@ -358,7 +358,44 @@ function processWarData(members, warLog) {
 
     const mergedWars = Array.from(mergedWarsMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
 
-    const columns = mergedWars.map(war => ({
+    const dateMergedMap = new Map();
+    mergedWars.forEach(war => {
+        const dateKey = formatWarDate(war.endDateObj.toISOString());
+        if (!dateMergedMap.has(dateKey)) {
+            dateMergedMap.set(dateKey, { ...war, dateKey });
+            return;
+        }
+        const existing = dateMergedMap.get(dateKey);
+        const existingLabel = existing.label || '';
+        const nextLabel = war.label || '';
+        const preferredLabel = nextLabel.includes('Season') || nextLabel.length > existingLabel.length ? nextLabel : existingLabel;
+        const combined = [...(existing.participants || []), ...(war.participants || [])];
+        const byKey = new Map();
+        combined.forEach(participant => {
+            const participantKey = participant.tag || participant.name;
+            if (!participantKey) return;
+            const prev = byKey.get(participantKey);
+            if (!prev) {
+                byKey.set(participantKey, { ...participant });
+                return;
+            }
+            const prevPoints = prev.warPoints ?? prev.fame ?? 0;
+            const nextPoints = participant.warPoints ?? participant.fame ?? 0;
+            const merged = nextPoints > prevPoints ? { ...prev, ...participant } : { ...participant, ...prev };
+            const prevDecks = prev.decksUsed ?? prev.battlesPlayed ?? 0;
+            const nextDecks = participant.decksUsed ?? participant.battlesPlayed ?? 0;
+            if (nextDecks > prevDecks) {
+                merged.decksUsed = participant.decksUsed ?? participant.battlesPlayed ?? merged.decksUsed;
+            }
+            byKey.set(participantKey, merged);
+        });
+        existing.participants = Array.from(byKey.values());
+        existing.label = preferredLabel || existing.label;
+    });
+
+    const dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
+
+    const columns = dateMergedWars.map(war => ({
         label: war.label || formatWarDate(war.endDateObj.toISOString()),
         endDate: war.endDateObj
     }));
@@ -376,7 +413,7 @@ function processWarData(members, warLog) {
     });
 
     // Update scores for participants
-    mergedWars.forEach((war, index) => {
+    dateMergedWars.forEach((war, index) => {
         const baseLabel = war.label || formatWarDate(war.endDateObj.toISOString());
         const dateLabel = index === 0 && CURRENT_WAR_LABEL ? CURRENT_WAR_LABEL : baseLabel;
         const participants = war.participants || war.standings || [];
