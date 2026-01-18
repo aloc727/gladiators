@@ -565,6 +565,34 @@ td:not(:first-child) {
     line-height: 14px;
     text-align: center;
     cursor: help;
+    position: relative;
+}
+
+.info-icon::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 8px);
+    transform: translateX(-50%);
+    background: #0f172a;
+    color: #f8fafc;
+    font-size: 12px;
+    line-height: 1.2;
+    padding: 6px 8px;
+    border-radius: 8px;
+    white-space: normal;
+    min-width: 200px;
+    max-width: 260px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 20;
+}
+
+.info-icon:hover::after,
+.info-icon:focus::after {
+    opacity: 1;
 }
 
 .role-pill {

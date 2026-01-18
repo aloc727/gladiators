@@ -1175,7 +1175,7 @@ function renderDashboard() {
 
     if (promotionEl) {
         promotionEl.innerHTML = `
-            <h3>Promotion Ready <span class="info-icon" title="Members and elders with 12 straight weeks at 1600+ (no N/A weeks).">?</span></h3>
+            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks).">?</span></h3>
             <ul class="list">
                 ${promotionList.length ? promotionList.map(player => `
                     <li class="list-item"><span>${player.name}</span><span class="badge badge-promote">1600+ x12</span></li>
@@ -1202,7 +1202,7 @@ function renderDashboard() {
 
     if (demotionEl) {
         demotionEl.innerHTML = `
-            <h3>Demotion Watch <span class="info-icon" title="Members/elders below 1600 in a week, or co-leaders with 0 for 12 straight weeks.">?</span></h3>
+            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below 1600 in a week, or co-leaders with 0 for 12 straight weeks.">?</span></h3>
             <ul class="list">
                 ${demotionThreshold ? (demotionList.length ? demotionList.map(player => `
                     <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">${player.score} pts</span></li>
