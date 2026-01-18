@@ -25,7 +25,7 @@ const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.8.0';
+const UI_VERSION = 'v1.9.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -801,6 +801,13 @@ function formatNumber(value) {
     return Number(value || 0).toLocaleString('en-US');
 }
 
+function formatChartValue(value) {
+    if (value === null || value === undefined || value === 0) {
+        return 'N/A';
+    }
+    return formatNumber(value);
+}
+
 function getScoreClass(value) {
     if (value >= WAR_REQUIREMENT) return 'score-green';
     if (value >= WARNING_THRESHOLD) return 'score-yellow';
@@ -1022,7 +1029,7 @@ function renderPlayersPage(data) {
                             ${player.name}
                             ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
                         </td>
-                        <td>${player.score}</td>
+                        <td>${formatChartValue(player.score)}</td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -1067,8 +1074,8 @@ function renderPlayersPage(data) {
                             ${player.name}
                             ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
                         </td>
-                        <td>${player.total}</td>
-                        <td>${player.average}</td>
+                        <td>${formatChartValue(player.total)}</td>
+                        <td>${formatChartValue(player.average)}</td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -1223,8 +1230,8 @@ function renderDashboard() {
                 </div>
                 <div class="thermo-metrics">
                     <div class="momentum-value">${formatNumber(totalPoints)} total points</div>
-                    <div class="momentum-sub">${Math.round(minimumPercent * 100)}% of 80,000 (required minimum).</div>
                     <div class="momentum-sub">${Math.round(momentumPercent * 100)}% of 180,000 (total possible).</div>
+                    <div class="momentum-sub">${Math.round(minimumPercent * 100)}% of 80,000 (required minimum).</div>
                 </div>
             </div>
             <p class="strategy-text">

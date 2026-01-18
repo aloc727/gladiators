@@ -88,6 +88,7 @@ A website to display weekly war battle scores for clan members using the Clash R
 ## Background Notes
 
 - v1.8.0: Added /summary and /players tabs, moved promo/demotion cards to homepage, thermometer widget
+- v1.9.0: Thermometer label order + N/A in charts, track joinedAt for members
 
 ## Netlify Deployment
 

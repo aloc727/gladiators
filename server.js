@@ -176,16 +176,18 @@ function attachMemberHistory(memberList) {
     const enriched = memberList.map(member => {
         const existing = historyMap.get(member.tag);
         const firstSeen = existing?.firstSeen || now;
+        const joinedAt = existing?.joinedAt || now;
         const tenureKnown = existing?.tenureKnown ?? !isFirstRun;
         historyMap.set(member.tag, {
             tag: member.tag,
             firstSeen,
+            joinedAt,
             lastSeen: now,
             name: member.name,
             role: member.role,
             tenureKnown
         });
-        return { ...member, firstSeen, tenureKnown, isCurrent: true };
+        return { ...member, firstSeen, joinedAt, tenureKnown, isCurrent: true };
     });
 
     saveMemberHistory(Array.from(historyMap.values()), seededAt);
@@ -204,6 +206,7 @@ function getMemberHistoryList(currentMembers) {
             name: item.name || item.tag,
             role: item.role || 'member',
             firstSeen: item.firstSeen,
+            joinedAt: item.joinedAt || item.firstSeen,
             tenureKnown: item.tenureKnown ?? false,
             isCurrent: false
         }));
