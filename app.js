@@ -240,7 +240,8 @@ function formatWarDate(dateString) {
 
 function formatWarRange(endDate) {
     const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - 7);
+    // Wars start on Thursday and end Monday (5-day span).
+    startDate.setDate(startDate.getDate() - 5);
     return `${formatWarDate(startDate.toISOString())}-${formatWarDate(endDate.toISOString())}`;
 }
 
