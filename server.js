@@ -165,6 +165,41 @@ function normalizeParticipants(participants = []) {
     }));
 }
 
+function mergeParticipantLists(primary = [], secondary = []) {
+    const mergedMap = new Map();
+    const addParticipant = (participant, preferExisting = false) => {
+        const key = participant.tag || participant.name;
+        if (!key) return;
+        if (!mergedMap.has(key)) {
+            mergedMap.set(key, { ...participant });
+            return;
+        }
+        const existing = mergedMap.get(key);
+        const existingPoints = existing.warPoints ?? existing.fame ?? 0;
+        const incomingPoints = participant.warPoints ?? participant.fame ?? 0;
+        const winner = incomingPoints > existingPoints ? { ...existing, ...participant } : { ...participant, ...existing };
+        const existingDecks = existing.decksUsed ?? existing.battlesPlayed ?? 0;
+        const incomingDecks = participant.decksUsed ?? participant.battlesPlayed ?? 0;
+        if (incomingDecks > existingDecks) {
+            winner.decksUsed = participant.decksUsed ?? participant.battlesPlayed ?? winner.decksUsed;
+        }
+        mergedMap.set(key, preferExisting ? { ...winner, ...existing } : winner);
+    };
+
+    primary.forEach(p => addParticipant(p, true));
+    secondary.forEach(p => addParticipant(p, false));
+    return Array.from(mergedMap.values());
+}
+
+function enrichWarEntry(entry, source) {
+    if (entry.participants) {
+        entry.rawParticipants = entry.participants.map(p => ({ ...p }));
+        entry.participants = normalizeParticipants(entry.participants);
+    }
+    entry.source = source;
+    return entry;
+}
+
 function attachMemberHistory(memberList) {
     const now = new Date().toISOString();
     const historyData = loadMemberHistory();
@@ -224,7 +259,15 @@ function upsertWarEntry(entry, history) {
 
     const existingIndex = history.findIndex(item => getWarEntryKey(item) === key);
     if (existingIndex >= 0) {
-        history[existingIndex] = entry;
+        const existing = history[existingIndex];
+        const mergedEntry = { ...existing, ...entry };
+        if (existing.rawParticipants || entry.rawParticipants) {
+            mergedEntry.rawParticipants = mergeParticipantLists(entry.rawParticipants || [], existing.rawParticipants || []);
+        }
+        if (existing.participants || entry.participants) {
+            mergedEntry.participants = mergeParticipantLists(entry.participants || [], existing.participants || []);
+        }
+        history[existingIndex] = mergedEntry;
     } else {
         history.push(entry);
     }
@@ -362,8 +405,8 @@ function convertRiverRaceToWarLog(riverRaceData) {
     currentMonday.setDate(now.getDate() + daysUntilMonday);
     currentMonday.setHours(4, 30, 0, 0);
     
-    // Convert participants to war log format
-    const participants = normalizeParticipants(riverRaceData.clan.participants);
+    // Convert participants to war log format (keep raw fields)
+    const participants = riverRaceData.clan.participants;
     
     // Return as a single war entry (current week)
     return [{
@@ -522,12 +565,7 @@ async function refreshServerCache() {
     try {
         const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
         const data = await makeAPIRequestPromise(warlogEndpoint);
-        const items = (data.items || []).map(item => {
-            if (item.participants) {
-                item.participants = normalizeParticipants(item.participants);
-            }
-            return item;
-        });
+        const items = (data.items || []).map(item => enrichWarEntry(item, 'warlog'));
         items.forEach(entry => {
             warHistoryCache = upsertWarEntry(entry, warHistoryCache);
         });
@@ -542,10 +580,7 @@ async function refreshServerCache() {
                 const riverData = await makeAPIRequestPromise(riverRaceEndpoint);
                 const currentEntries = convertRiverRaceToWarLog(riverData);
                 currentEntries.forEach(entry => {
-                    if (entry.participants) {
-                        entry.participants = normalizeParticipants(entry.participants);
-                    }
-                    warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+                    warHistoryCache = upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
                 });
                 const combined = mergeWarLogs(currentEntries, warHistoryCache);
                 warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
@@ -608,10 +643,7 @@ function captureCurrentWeek() {
 
             const currentEntries = convertRiverRaceToWarLog(riverData);
         currentEntries.forEach(entry => {
-                if (entry.participants) {
-                    entry.participants = normalizeParticipants(entry.participants);
-                }
-            warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+            warHistoryCache = upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
         });
     });
 }
@@ -671,10 +703,7 @@ function checkWarLogAvailability() {
             }
             warLogAvailable = true;
             data.items.forEach(entry => {
-                if (entry.participants) {
-                    entry.participants = normalizeParticipants(entry.participants);
-                }
-                warHistoryCache = upsertWarEntry(entry, warHistoryCache);
+                warHistoryCache = upsertWarEntry(enrichWarEntry(entry, 'warlog'), warHistoryCache);
             });
             return;
         }
