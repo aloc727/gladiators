@@ -25,7 +25,7 @@ const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.3.1';
+const UI_VERSION = 'v1.6.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -1052,7 +1052,7 @@ function renderDashboard() {
             <div class="stat-item">Average Points: <strong>${avgPoints}</strong></div>
             <div class="stat-item">Decks Used: <strong>${totalDecks}</strong></div>
             <div class="stat-item">On Track (1600+): <strong>${onTrack}</strong></div>
-            <div class="stat-item">Needs Nudge (800-1599): <strong>${needsNudge}</strong></div>
+            <div class="stat-item">Needs Nudge (800 - 1599): <strong>${needsNudge}</strong></div>
             <div class="stat-item">At Risk (0-799): <strong>${atRisk}</strong></div>
             <div class="stat-item">Points Needed to Reach 1600: <strong>${pointsNeeded}</strong></div>
         </div>

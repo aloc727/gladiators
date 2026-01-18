@@ -85,6 +85,10 @@ A website to display weekly war battle scores for clan members using the Clash R
 - Local history is stored in `data/war-history.json` (not committed to git)
 - The server runs on port 3000 by default (change in `server.js` if needed)
 
+## Background Notes
+
+- v1.6.0: UX polish for mobile menu, table scroll on mobile, range labels spacing
+
 ## Netlify Deployment
 
 This project is ready for Netlify:
