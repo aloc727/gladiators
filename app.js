@@ -238,6 +238,26 @@ function formatWarDate(dateString) {
     return `${month}/${day}/${year}`;
 }
 
+function formatWarRange(endDate) {
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 7);
+    return `${formatWarDate(startDate.toISOString())}-${formatWarDate(endDate.toISOString())}`;
+}
+
+function getSeasonWeekLabel(war) {
+    const seasonId = war.seasonId ?? war.season?.id ?? null;
+    const weekIndex = Number.isInteger(war.sectionIndex) ? war.sectionIndex + 1
+        : Number.isInteger(war.periodIndex) ? war.periodIndex + 1
+        : null;
+    if (seasonId && weekIndex) {
+        return `Season ${seasonId} Week ${weekIndex}`;
+    }
+    if (war.label && war.label.includes('Season')) {
+        return war.label.replace(/\s*\(.*\)$/, '');
+    }
+    return '';
+}
+
 // Get the Monday date for a war (wars end Monday at 4:30am CT)
 function getWarEndDate(war) {
     // Try different possible date fields from the API
@@ -395,17 +415,43 @@ function processWarData(members, warLog) {
 
     const dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
 
-    const columns = dateMergedWars.map(war => ({
-        label: war.label || formatWarDate(war.endDateObj.toISOString()),
-        endDate: war.endDateObj
-    }));
+    const columns = dateMergedWars.map((war, index) => {
+        const baseLabel = war.label || formatWarDate(war.endDateObj.toISOString());
+        if (index === 0) {
+            const seasonWeek = getSeasonWeekLabel(war);
+            const range = formatWarRange(war.endDateObj);
+            const currentLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
+            return { label: currentLabel, endDate: war.endDateObj, baseLabel };
+        }
+        return { label: baseLabel, endDate: war.endDateObj };
+    });
+
+    const labelRangeRegex = /(\d{1,2}\/\d{1,2}\/\d{4})/g;
+    const dateOnlyRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+    const seasonEndMap = new Set();
+    columns.forEach(column => {
+        if (!column.label || !column.label.includes('Season')) return;
+        const matches = column.label.match(labelRangeRegex);
+        if (!matches || !matches.length) return;
+        const endDate = new Date(matches[matches.length - 1]);
+        endDate.setDate(endDate.getDate() + 1);
+        const key = `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}`;
+        seasonEndMap.add(key);
+    });
+
+    const filteredColumns = columns.filter(column => {
+        if (!dateOnlyRegex.test(column.label || '')) return true;
+        const [month, day] = column.label.split('/');
+        const key = `${month}/${day}`;
+        return !seasonEndMap.has(key);
+    });
 
     if (columns.length && CURRENT_WAR_LABEL) {
         columns[0].label = CURRENT_WAR_LABEL;
     }
 
     // Initialize all players with 0 for each date column
-    columns.forEach(column => {
+    filteredColumns.forEach(column => {
         playersMap.forEach(player => {
             player.scores[column.label] = 0;
             player.decksUsed[column.label] = 0;
@@ -415,8 +461,17 @@ function processWarData(members, warLog) {
     // Update scores for participants
     dateMergedWars.forEach((war, index) => {
         const baseLabel = war.label || formatWarDate(war.endDateObj.toISOString());
-        const dateLabel = index === 0 && CURRENT_WAR_LABEL ? CURRENT_WAR_LABEL : baseLabel;
+        let dateLabel = index === 0 && CURRENT_WAR_LABEL ? CURRENT_WAR_LABEL : baseLabel;
+        if (index === 0) {
+            const column = filteredColumns[0];
+            if (column?.label) {
+                dateLabel = column.label;
+            }
+        }
         const participants = war.participants || war.standings || [];
+        if (!filteredColumns.find(column => column.label === dateLabel)) {
+            return;
+        }
         participants.forEach(participant => {
             const tag = participant.tag;
             let player = tag ? playersMap.get(tag) : null;
@@ -450,7 +505,7 @@ function processWarData(members, warLog) {
         const recentCutoff = new Date(now.getTime() - RECENT_JOIN_DAYS * 24 * 60 * 60 * 1000);
         player.joinedRecently = joinDate ? joinDate >= recentCutoff : false;
 
-        columns.forEach(column => {
+    filteredColumns.forEach(column => {
             if (joinDate && joinDate > column.endDate) {
                 player.scores[column.label] = null;
             }
@@ -458,7 +513,7 @@ function processWarData(members, warLog) {
     });
 
     // Identify promotion-ready members/elders (1600+ for 12 consecutive weeks, not co-leader/leader)
-    const streakColumns = columns.slice(0, 12);
+    const streakColumns = filteredColumns.slice(0, 12);
     playersMap.forEach(player => {
         if (!streakColumns.length) {
             player.promotionReady = false;
@@ -514,7 +569,7 @@ function processWarData(members, warLog) {
 
     return {
         players,
-        columns
+        columns: filteredColumns
     };
 }
 

@@ -367,7 +367,10 @@ function convertRiverRaceToWarLog(riverRaceData) {
         participants: participants,
         createdDate: currentMonday.toISOString(),
         endDate: currentMonday.toISOString(),
-        state: riverRaceData.state || 'unknown'
+        state: riverRaceData.state || 'unknown',
+        seasonId: riverRaceData.seasonId,
+        sectionIndex: riverRaceData.sectionIndex,
+        periodIndex: riverRaceData.periodIndex
     }];
 }
 
