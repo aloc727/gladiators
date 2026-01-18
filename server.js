@@ -719,7 +719,7 @@ const server = http.createServer((req, res) => {
     
     // Serve static files
     let filePath = '.' + pathname;
-    if (filePath === './') {
+    if (filePath === './' || pathname === '/summary' || pathname === '/players') {
         filePath = './index.html';
     }
     

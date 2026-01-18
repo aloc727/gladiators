@@ -30,8 +30,9 @@
                 <span></span>
             </button>
             <nav class="menu-tabs" id="menuTabs">
-                <button class="menu-tab active" data-tab="table">War Table</button>
-                <button class="menu-tab" data-tab="summary">Summary</button>
+                <button class="menu-tab active" data-tab="table" data-route="/">War Table</button>
+                <button class="menu-tab" data-tab="summary" data-route="/summary">Summary</button>
+                <button class="menu-tab" data-tab="players" data-route="/players">Players</button>
             </nav>
         </div>
 
@@ -42,6 +43,11 @@
                 <span class="legend-item legend-red">0 - 799 (At Risk)</span>
                 <span class="legend-item legend-na">N/A (New This Week)</span>
             </div>
+
+            <section class="home-cards">
+                <div class="dashboard-card" id="promotionBoard"></div>
+                <div class="dashboard-card" id="demotionBoard"></div>
+            </section>
 
             <div class="tabs">
                 <button class="range-tab active" data-range="recent">Recent (Last 2 Months)</button>
@@ -79,20 +85,7 @@
 
             <section class="dashboard">
                 <div class="dashboard-card" id="clanStats"></div>
-                <div class="dashboard-card" id="promotionBoard"></div>
-                <div class="dashboard-card" id="demotionBoard"></div>
                 <div class="dashboard-card" id="strategyBoard"></div>
-            </section>
-
-            <section class="summary-tables">
-                <div class="summary-card">
-                    <h3>Most Improved (Last Week)</h3>
-                    <div class="summary-table" id="improvementTable"></div>
-                </div>
-                <div class="summary-card">
-                    <h3>Leaderboard (Last 3 Months)</h3>
-                    <div class="summary-table" id="leaderboardTable"></div>
-                </div>
             </section>
 
             <section class="info-section">
@@ -111,8 +104,25 @@
             </section>
         </section>
 
+        <section class="tab-panel" id="tab-players">
+            <section class="summary-tables">
+                <div class="summary-card">
+                    <h3>Top Performers (Current Week)</h3>
+                    <div class="summary-table" id="topPerformersTable"></div>
+                </div>
+                <div class="summary-card">
+                    <h3>Most Improved (Last Week)</h3>
+                    <div class="summary-table" id="improvementTable"></div>
+                </div>
+                <div class="summary-card">
+                    <h3>Leaderboard (Last 3 Months)</h3>
+                    <div class="summary-table" id="leaderboardTable"></div>
+                </div>
+            </section>
+        </section>
+
         <footer class="site-footer">
-            <span class="version-tag" id="uiVersion">UI v1.6.0</span>
+            <span class="version-tag" id="uiVersion">UI v1.8.0</span>
         </footer>
     </div>
     

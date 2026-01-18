@@ -25,7 +25,7 @@ const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.6.0';
+const UI_VERSION = 'v1.8.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuTabs = document.getElementById('menuTabs');
     document.querySelectorAll('.menu-tab').forEach(button => {
         button.addEventListener('click', () => {
-            setActiveTab(button.dataset.tab);
+            setActiveTab(button.dataset.tab, true);
             if (menuTabs) {
                 menuTabs.classList.remove('open');
             }
@@ -62,6 +62,11 @@ document.addEventListener('DOMContentLoaded', () => {
             menuTabs.classList.toggle('open');
         });
     }
+
+    applyRoute(window.location.pathname);
+    window.addEventListener('popstate', () => {
+        applyRoute(window.location.pathname);
+    });
 
     // Range switching
     document.querySelectorAll('.range-tab').forEach(button => {
@@ -827,6 +832,7 @@ function renderView() {
     applySavedSortOrDefault(viewData.columns);
     renderHighlights(viewData);
     renderDashboard();
+    renderPlayersPage(viewData);
     renderTabVisibility();
 }
 
@@ -850,24 +856,54 @@ function applySavedSortOrDefault(columns) {
 function renderTabVisibility() {
     const tablePanel = document.getElementById('tab-table');
     const summaryPanel = document.getElementById('tab-summary');
-    if (!tablePanel || !summaryPanel) return;
+    const playersPanel = document.getElementById('tab-players');
+    if (!tablePanel || !summaryPanel || !playersPanel) return;
 
     if (currentTab === 'summary') {
         summaryPanel.classList.add('active');
         tablePanel.classList.remove('active');
+        playersPanel.classList.remove('active');
+        return;
+    }
+
+    if (currentTab === 'players') {
+        playersPanel.classList.add('active');
+        tablePanel.classList.remove('active');
+        summaryPanel.classList.remove('active');
         return;
     }
 
     summaryPanel.classList.remove('active');
     tablePanel.classList.add('active');
+    playersPanel.classList.remove('active');
 }
 
-function setActiveTab(tab) {
+function setActiveTab(tab, updateUrl = false) {
     currentTab = tab;
     document.querySelectorAll('.menu-tab').forEach(button => {
         button.classList.toggle('active', button.dataset.tab === tab);
     });
     renderTabVisibility();
+
+    if (updateUrl) {
+        const button = document.querySelector(`.menu-tab[data-tab="${tab}"]`);
+        const route = button?.dataset.route || '/';
+        if (window.location.pathname !== route) {
+            window.history.pushState({}, '', route);
+        }
+    }
+}
+
+function applyRoute(pathname) {
+    if (pathname === '/summary') {
+        setActiveTab('summary');
+        return;
+    }
+    if (pathname === '/players') {
+        setActiveTab('players');
+        return;
+    }
+    setActiveTab('table', true);
 }
 
 function focusPlayerRow(playerTag, playerName) {
@@ -908,8 +944,6 @@ function renderHighlights(data) {
 
     const clanTotal = scores.reduce((sum, item) => sum + item.score, 0);
     const avgScore = scores.length ? Math.round(clanTotal / scores.length) : 0;
-    const topPerformers = [...scores].sort((a, b) => b.score - a.score).slice(0, 3);
-
     highlightsEl.innerHTML = `
         <div class="highlight-card">
             <h4>Current Week Total</h4>
@@ -919,11 +953,135 @@ function renderHighlights(data) {
             <h4>Current Week Average</h4>
             <p>${avgScore} points</p>
         </div>
-        <div class="highlight-card">
-            <h4>Top Performers</h4>
-            <p>${topPerformers.map(p => `${p.name} (${p.score})`).join('<br>') || 'No data yet'}</p>
-        </div>
     `;
+}
+
+function renderPlayersPage(data) {
+    const { players } = data;
+    const topEl = document.getElementById('topPerformersTable');
+    const improvementEl = document.getElementById('improvementTable');
+    const leaderboardEl = document.getElementById('leaderboardTable');
+    if (!topEl || !improvementEl || !leaderboardEl) return;
+    const fullColumns = latestData?.columns || [];
+    if (!fullColumns.length) return;
+
+    const currentColumn = fullColumns[0];
+    const topPerformers = [...players]
+        .map(player => ({
+            name: player.name,
+            tag: player.tag || '',
+            score: player.scores[currentColumn.label]
+        }))
+        .filter(item => item.score !== null && item.score !== undefined)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+
+    const previousColumn = fullColumns[1];
+    const improvements = previousColumn ? players
+        .map(player => ({
+            name: player.name,
+            tag: player.tag || '',
+            delta: (player.scores[currentColumn.label] ?? 0) - (player.scores[previousColumn.label] ?? 0)
+        }))
+        .filter(item => !Number.isNaN(item.delta))
+        .sort((a, b) => b.delta - a.delta)
+        .slice(0, 10) : [];
+
+    const leaderboardColumns = fullColumns.slice(0, 12);
+    const leaderboard = leaderboardColumns.length ? players
+        .map(player => {
+            const scores = leaderboardColumns
+                .map(col => player.scores[col.label])
+                .filter(score => score !== null && score !== undefined);
+            const total = scores.reduce((sum, score) => sum + score, 0);
+            const weeks = scores.length;
+            return {
+                name: player.name,
+                tag: player.tag || '',
+                total,
+                average: weeks ? Math.round(total / weeks) : 0,
+                weeks
+            };
+        })
+        .filter(entry => entry.weeks > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10) : [];
+
+    topEl.innerHTML = topPerformers.length ? `
+        <table>
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${topPerformers.map(player => `
+                    <tr data-tag="${player.tag}" data-name="${player.name}">
+                        <td class="summary-player">
+                            ${player.name}
+                            ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                        </td>
+                        <td>${player.score}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    ` : '<p>No current week data yet.</p>';
+
+    improvementEl.innerHTML = improvements.length ? `
+        <table>
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Change</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${improvements.map(player => `
+                    <tr data-tag="${player.tag}" data-name="${player.name}">
+                        <td class="summary-player">
+                            ${player.name}
+                            ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                        </td>
+                        <td>${player.delta >= 0 ? `+${player.delta}` : player.delta}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    ` : '<p>No week-over-week data yet.</p>';
+
+    leaderboardEl.innerHTML = leaderboard.length ? `
+        <table>
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Total</th>
+                    <th>Avg</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${leaderboard.map(player => `
+                    <tr data-tag="${player.tag}" data-name="${player.name}">
+                        <td class="summary-player">
+                            ${player.name}
+                            ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                        </td>
+                        <td>${player.total}</td>
+                        <td>${player.average}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    ` : '<p>No recent history yet.</p>';
+
+    [topEl, improvementEl, leaderboardEl].forEach(container => {
+        container.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', () => {
+                focusPlayerRow(row.dataset.tag, row.dataset.name);
+            });
+        });
+    });
 }
 
 function getCentralTimeInfo() {
@@ -966,10 +1124,6 @@ function renderDashboard() {
     const promotionEl = document.getElementById('promotionBoard');
     const demotionEl = document.getElementById('demotionBoard');
     const strategyEl = document.getElementById('strategyBoard');
-    const improvementEl = document.getElementById('improvementTable');
-    const leaderboardEl = document.getElementById('leaderboardTable');
-
-    if (!clanStatsEl || !promotionEl || !demotionEl || !strategyEl) return;
 
     const allColumns = latestData.columns;
     const currentColumn = allColumns[0];
@@ -992,9 +1146,36 @@ function renderDashboard() {
     const participationRate = players.length ? Math.round((participants.length / players.length) * 100) : 0;
     const pointsNeeded = participants.reduce((sum, item) => sum + Math.max(0, WAR_REQUIREMENT - item.score), 0);
 
+    if (clanStatsEl) {
+        clanStatsEl.innerHTML = `
+            <h3>Clan War Snapshot</h3>
+            <div class="stat-grid">
+                <div class="stat-item">Participation: <strong>${participants.length}/${players.length}</strong> (${participationRate}%)</div>
+                <div class="stat-item">Total Points: <strong>${totalPoints}</strong></div>
+                <div class="stat-item">Average Points: <strong>${avgPoints}</strong></div>
+                <div class="stat-item">Decks Used: <strong>${totalDecks}</strong></div>
+                <div class="stat-item">On Track (1600+): <strong>${onTrack}</strong></div>
+                <div class="stat-item">Needs Nudge (800 - 1599): <strong>${needsNudge}</strong></div>
+                <div class="stat-item">At Risk (0 - 799): <strong>${atRisk}</strong></div>
+                <div class="stat-item">Points Needed to Reach 1600: <strong>${pointsNeeded}</strong></div>
+            </div>
+        `;
+    }
+
     const promotionList = players
         .filter(player => player.promotionReady)
         .slice(0, 8);
+
+    if (promotionEl) {
+        promotionEl.innerHTML = `
+            <h3>Promotion Ready</h3>
+            <ul class="list">
+                ${promotionList.length ? promotionList.map(player => `
+                    <li class="list-item"><span>${player.name}</span><span class="badge badge-promote">1600+ x12</span></li>
+                `).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
+            </ul>
+        `;
+    }
 
     const demotionThreshold = getDemotionThreshold();
     const demotionList = demotionThreshold ? players
@@ -1012,188 +1193,44 @@ function renderDashboard() {
         }))
         .slice(0, 8) : [];
 
-    const previousColumn = allColumns[1];
-    const playerTagMap = new Map(players.map(player => [player.name, player.tag || '']));
-    const improvements = previousColumn ? players
-        .map(player => ({
-            name: player.name,
-            tag: player.tag || '',
-            delta: (player.scores[currentColumn.label] ?? 0) - (player.scores[previousColumn.label] ?? 0)
-        }))
-        .filter(item => !Number.isNaN(item.delta))
-        .sort((a, b) => b.delta - a.delta)
-        .slice(0, 5) : [];
-
-    const leaderboardColumns = allColumns.slice(0, 12);
-    const leaderboard = leaderboardColumns.length ? players
-        .map(player => {
-            const scores = leaderboardColumns
-                .map(col => player.scores[col.label])
-                .filter(score => score !== null && score !== undefined);
-            const total = scores.reduce((sum, score) => sum + score, 0);
-            const weeks = scores.length;
-            return {
-                name: player.name,
-                tag: player.tag || '',
-                total,
-                average: weeks ? Math.round(total / weeks) : 0,
-                weeks
-            };
-        })
-        .filter(entry => entry.weeks > 0)
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 10) : [];
-
-    clanStatsEl.innerHTML = `
-        <h3>Clan War Snapshot</h3>
-        <div class="stat-grid">
-            <div class="stat-item">Participation: <strong>${participants.length}/${players.length}</strong> (${participationRate}%)</div>
-            <div class="stat-item">Total Points: <strong>${totalPoints}</strong></div>
-            <div class="stat-item">Average Points: <strong>${avgPoints}</strong></div>
-            <div class="stat-item">Decks Used: <strong>${totalDecks}</strong></div>
-            <div class="stat-item">On Track (1600+): <strong>${onTrack}</strong></div>
-            <div class="stat-item">Needs Nudge (800 - 1599): <strong>${needsNudge}</strong></div>
-            <div class="stat-item">At Risk (0-799): <strong>${atRisk}</strong></div>
-            <div class="stat-item">Points Needed to Reach 1600: <strong>${pointsNeeded}</strong></div>
-        </div>
-    `;
-
-    promotionEl.innerHTML = `
-        <h3>Promotion Ready</h3>
-        <ul class="list">
-            ${promotionList.length ? promotionList.map(player => `
-                <li class="list-item"><span>${player.name}</span><span class="badge badge-promote">1600+ x12</span></li>
-            `).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
-        </ul>
-    `;
-
-    demotionEl.innerHTML = `
-        <h3>Demotion Watch</h3>
-        <ul class="list">
-            ${demotionThreshold ? (demotionList.length ? demotionList.map(player => `
-                <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">${player.score} pts</span></li>
-            `).join('') : '<li class="list-item">No one flagged for this checkpoint.</li>') : '<li class="list-item">Demotion watch begins Sunday 4:30am CT.</li>'}
-        </ul>
-    `;
-
-    const requiredMinimum = 80000;
-    const momentumTarget = 190000;
-    const momentumPercent = Math.min(totalPoints / momentumTarget, 1);
-    const minimumPercent = Math.min(totalPoints / requiredMinimum, 1);
-    const tickStops = [
-        { label: '0', percent: 0 },
-        { label: '80k', percent: requiredMinimum / momentumTarget },
-        { label: '190k', percent: 1 }
-    ];
-    const tickLines = tickStops.map(stop => {
-        const angle = -180 + (stop.percent * 180);
-        return `
-            <g transform="rotate(${angle} 110 100)">
-                <line x1="110" y1="24" x2="110" y2="36" stroke="#94a3b8" stroke-width="2" />
-            </g>
+    if (demotionEl) {
+        demotionEl.innerHTML = `
+            <h3>Demotion Watch</h3>
+            <ul class="list">
+                ${demotionThreshold ? (demotionList.length ? demotionList.map(player => `
+                    <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">${player.score} pts</span></li>
+                `).join('') : '<li class="list-item">No one flagged for this checkpoint.</li>') : '<li class="list-item">Demotion watch begins Sunday 4:30am CT.</li>'}
+            </ul>
         `;
-    }).join('');
-    const tickLabels = tickStops.map(stop => {
-        const angle = -180 + (stop.percent * 180);
-        const radians = (angle * Math.PI) / 180;
-        const radius = 92;
-        const x = 110 + radius * Math.cos(radians);
-        const y = 100 + radius * Math.sin(radians);
-        return `<text x="${x}" y="${y}" text-anchor="middle" class="momentum-label">${stop.label}</text>`;
-    }).join('');
-    strategyEl.innerHTML = `
-        <h3>Momentum & Strategy</h3>
-        <div class="momentum-widget">
-            <div class="momentum-gauge">
-                <svg viewBox="0 0 220 120" role="img" aria-label="Momentum gauge">
-                    <defs>
-                        <linearGradient id="momentumGradient" x1="0" y1="0" x2="1" y2="0">
-                            <stop offset="0%" stop-color="#ef4444"/>
-                            <stop offset="55%" stop-color="#f59e0b"/>
-                            <stop offset="100%" stop-color="#22c55e"/>
-                        </linearGradient>
-                    </defs>
-                    <path d="M20 100 A90 90 0 0 1 200 100" fill="none" stroke="#e2e8f0" stroke-width="14" stroke-linecap="round" pathLength="100"/>
-                    <path d="M20 100 A90 90 0 0 1 200 100" fill="none" stroke="url(#momentumGradient)" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="${momentumPercent * 100} 100"/>
-                    ${tickLines}
-                    ${tickLabels}
-                </svg>
+    }
+
+    if (strategyEl) {
+        const requiredMinimum = 80000;
+        const momentumTarget = 900 * 50 * 4;
+        const momentumPercent = Math.min(totalPoints / momentumTarget, 1);
+        const minimumPercent = Math.min(totalPoints / requiredMinimum, 1);
+        const fillPercent = Math.min(momentumPercent * 100, 100);
+        strategyEl.innerHTML = `
+            <h3>Momentum & Strategy</h3>
+            <div class="thermo-widget">
+                <div class="thermo-scale">
+                    <span>180k</span>
+                    <span>80k</span>
+                    <span>0</span>
+                </div>
+                <div class="thermo-meter">
+                    <div class="thermo-fill" style="height: ${fillPercent}%;"></div>
+                </div>
+                <div class="thermo-metrics">
+                    <div class="momentum-value">${formatNumber(totalPoints)} total points</div>
+                    <div class="momentum-sub">${Math.round(minimumPercent * 100)}% of 80,000 (required minimum).</div>
+                    <div class="momentum-sub">${Math.round(momentumPercent * 100)}% of 180,000 (total possible).</div>
+                </div>
             </div>
-            <div class="momentum-metrics">
-                <div class="momentum-value">${formatNumber(totalPoints)} total points</div>
-                <div class="momentum-sub">${Math.round(minimumPercent * 100)}% of 80,000 (required minimum).</div>
-                <div class="momentum-sub">${Math.round(momentumPercent * 100)}% of 190,000 (total possible).</div>
-            </div>
-        </div>
-        <p class="strategy-text">
-            Keep the momentum: <strong>${formatNumber(pointsNeeded)}</strong> total points are needed to bring every participant up to the 1600 goal.
-        </p>
-    `;
-
-    if (improvementEl) {
-        improvementEl.innerHTML = improvements.length ? `
-            <table>
-                <thead>
-                    <tr>
-                        <th>Player</th>
-                        <th>Change</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${improvements.map(player => `
-                        <tr data-tag="${player.tag}" data-name="${player.name}">
-                            <td class="summary-player">
-                                ${player.name}
-                                ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
-                            </td>
-                            <td>${player.delta >= 0 ? `+${player.delta}` : player.delta}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        ` : '<p>No week-over-week data yet.</p>';
-    }
-
-    if (leaderboardEl) {
-        leaderboardEl.innerHTML = leaderboard.length ? `
-            <table>
-                <thead>
-                    <tr>
-                        <th>Player</th>
-                        <th>Total</th>
-                        <th>Avg</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${leaderboard.map(player => `
-                        <tr data-tag="${player.tag}" data-name="${player.name}">
-                            <td class="summary-player">
-                                ${player.name}
-                                ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
-                            </td>
-                            <td>${player.total}</td>
-                            <td>${player.average}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        ` : '<p>No recent history yet.</p>';
-    }
-
-    if (improvementEl) {
-        improvementEl.querySelectorAll('tbody tr').forEach(row => {
-            row.addEventListener('click', () => {
-                focusPlayerRow(row.dataset.tag, row.dataset.name);
-            });
-        });
-    }
-
-    if (leaderboardEl) {
-        leaderboardEl.querySelectorAll('tbody tr').forEach(row => {
-            row.addEventListener('click', () => {
-                focusPlayerRow(row.dataset.tag, row.dataset.name);
-            });
-        });
+            <p class="strategy-text">
+                Keep the momentum: <strong>${formatNumber(pointsNeeded)}</strong> total points are needed to bring every participant up to the 1600 goal.
+            </p>
+        `;
     }
 }
 
