@@ -25,7 +25,7 @@ const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.9.0';
+const UI_VERSION = 'v1.10.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {

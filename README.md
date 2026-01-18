@@ -89,6 +89,8 @@ A website to display weekly war battle scores for clan members using the Clash R
 
 - v1.8.0: Added /summary and /players tabs, moved promo/demotion cards to homepage, thermometer widget
 - v1.9.0: Thermometer label order + N/A in charts, track joinedAt for members
+- v1.10.0: Store raw warlog entries for full historical details when available
+- v1.10.0: Preserve full participant fields when warlog returns
 - v1.10.0: Store full warlog participant data when endpoint returns
 
 ## Netlify Deployment

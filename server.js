@@ -158,7 +158,9 @@ function getCurrentWarEndKey() {
 
 function normalizeParticipants(participants = []) {
     return participants.map(p => ({
+        ...p,
         tag: p.tag,
+        name: p.name,
         warPoints: p.warPoints ?? p.fame ?? 0,
         battlesPlayed: p.battlesPlayed ?? p.decksUsed ?? 0,
         decksUsed: p.decksUsed ?? p.battlesPlayed ?? 0
@@ -192,10 +194,13 @@ function mergeParticipantLists(primary = [], secondary = []) {
 }
 
 function enrichWarEntry(entry, source) {
+    const rawEntry = { ...entry };
     if (entry.participants) {
         entry.rawParticipants = entry.participants.map(p => ({ ...p }));
+        rawEntry.participants = entry.participants.map(p => ({ ...p }));
         entry.participants = normalizeParticipants(entry.participants);
     }
+    entry.rawEntry = rawEntry;
     entry.source = source;
     return entry;
 }
