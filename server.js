@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const db = require('./db');
 
 // SECURITY: Load environment variables from .env file if it exists
 // NEVER commit .env to version control!
@@ -24,13 +25,12 @@ const PORT = process.env.PORT || 3000;
 const CLAN_TAG = '2CPPJLJ';
 const API_BASE_URL = 'api.clashroyale.com';
 
-// Local storage for war history (simple JSON file, no external service)
-const DATA_DIR = path.join(__dirname, 'data');
-const HISTORY_FILE = path.join(DATA_DIR, 'war-history.json');
+// Database storage (PostgreSQL)
 const HISTORY_MAX_WEEKS = 260;
-const MEMBERS_FILE = path.join(DATA_DIR, 'members.json');
-const SNAPSHOTS_FILE = path.join(DATA_DIR, 'war-snapshots.json');
 const WARLOG_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily check
+
+// Fallback: Keep JSON file paths for migration/backup purposes
+const DATA_DIR = path.join(__dirname, 'data');
 
 // SECURITY: API Key MUST be set via environment variable only
 // NEVER hardcode API keys in source code!
@@ -49,84 +49,102 @@ if (!API_KEY || !isValidApiKey(API_KEY)) {
     console.warn('   Using DEMO MODE with sample data.\n');
 }
 
-function ensureDataDir() {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-}
-
-function loadWarHistory() {
+// Database helper functions (replacing JSON file operations)
+async function loadWarHistory() {
     try {
-        if (!fs.existsSync(HISTORY_FILE)) {
-            return [];
+        const warWeeks = await db.getWarWeeks(HISTORY_MAX_WEEKS);
+        const warLog = [];
+        
+        for (const week of warWeeks) {
+            const participants = await db.getParticipantsByWarWeek(week.id);
+            // Get member names for participants
+            const participantData = await Promise.all(participants.map(async (p) => {
+                const member = await db.getMemberByTag(p.memberTag);
+                const rawData = typeof p.rawData === 'object' ? p.rawData : (p.rawData ? JSON.parse(p.rawData) : {});
+                return {
+                    tag: p.memberTag,
+                    name: member?.name || p.memberTag,
+                    rank: p.rank,
+                    warPoints: p.warPoints,
+                    fame: p.warPoints, // Alias for compatibility
+                    decksUsed: p.decksUsed,
+                    battlesPlayed: p.decksUsed, // Alias for compatibility
+                    boatAttacks: p.boatAttacks,
+                    trophies: p.trophies,
+                    ...rawData // Merge any additional fields from raw data
+                };
+            }));
+            
+            warLog.push({
+                id: week.id,
+                seasonId: week.seasonId,
+                sectionIndex: week.sectionIndex,
+                periodIndex: week.periodIndex,
+                startDate: week.startDate,
+                endDate: week.endDate,
+                createdDate: week.createdDate,
+                dataSource: week.dataSource,
+                participants: participantData
+            });
         }
-        const content = fs.readFileSync(HISTORY_FILE, 'utf8');
-        const data = JSON.parse(content);
-        return Array.isArray(data.items) ? data.items : [];
+        
+        return warLog;
     } catch (error) {
-        console.warn('⚠️  Failed to load war history. Starting fresh.');
+        console.warn('⚠️  Failed to load war history from database:', error.message);
         return [];
     }
 }
 
-function saveWarHistory(items) {
+async function loadMemberHistory() {
     try {
-        ensureDataDir();
-        fs.writeFileSync(HISTORY_FILE, JSON.stringify({ items }, null, 2), 'utf8');
-    } catch (error) {
-        console.warn('⚠️  Failed to save war history.');
-    }
-}
-
-function loadMemberHistory() {
-    try {
-        if (!fs.existsSync(MEMBERS_FILE)) {
-            return { items: [], seededAt: null };
-        }
-        const content = fs.readFileSync(MEMBERS_FILE, 'utf8');
-        const data = JSON.parse(content);
-        if (Array.isArray(data)) {
-            return { items: data, seededAt: null };
-        }
+        const members = await db.getMembers(true); // Include former members
         return {
-            items: Array.isArray(data.items) ? data.items : [],
-            seededAt: data.seededAt || null
+            items: members.map(m => ({
+                tag: m.tag,
+                name: m.name,
+                role: m.role,
+                firstSeen: m.firstSeen,
+                joinedAt: m.joinedAt,
+                lastSeen: m.lastSeen,
+                tenureKnown: m.tenureKnown,
+                isCurrent: m.isCurrent
+            })),
+            seededAt: null // Not stored in DB, but kept for compatibility
         };
     } catch (error) {
-        console.warn('⚠️  Failed to load member history. Starting fresh.');
+        console.warn('⚠️  Failed to load member history from database:', error.message);
         return { items: [], seededAt: null };
     }
 }
 
-function saveMemberHistory(items, seededAt) {
+async function loadSnapshots() {
     try {
-        ensureDataDir();
-        fs.writeFileSync(MEMBERS_FILE, JSON.stringify({ seededAt, items }, null, 2), 'utf8');
-    } catch (error) {
-        console.warn('⚠️  Failed to save member history.');
-    }
-}
-
-function loadSnapshots() {
-    try {
-        if (!fs.existsSync(SNAPSHOTS_FILE)) {
-            return { weeks: {} };
+        const warWeeks = await db.getWarWeeks();
+        const snapshots = { weeks: {} };
+        
+        for (const week of warWeeks) {
+            const weekSnapshots = await db.getSnapshotsByWarWeek(week.id);
+            if (weekSnapshots.length > 0) {
+                // Convert to old format for compatibility
+                const samples = weekSnapshots.map(s => {
+                    const data = typeof s.snapshotData === 'object' ? s.snapshotData : JSON.parse(s.snapshotData || '{}');
+                    return {
+                        timestamp: s.snapshotTime,
+                        totalFame: data.totalFame || 0,
+                        participants: data.participants || []
+                    };
+                });
+                snapshots.weeks[week.endDate] = {
+                    samples,
+                    preReset: samples.find(s => s.totalFame > 0) || null
+                };
+            }
         }
-        const content = fs.readFileSync(SNAPSHOTS_FILE, 'utf8');
-        const data = JSON.parse(content);
-        return data && typeof data === 'object' ? data : { weeks: {} };
+        
+        return snapshots;
     } catch (error) {
-        console.warn('⚠️  Failed to load snapshots. Starting fresh.');
+        console.warn('⚠️  Failed to load snapshots from database:', error.message);
         return { weeks: {} };
-    }
-}
-
-function saveSnapshots(data) {
-    try {
-        ensureDataDir();
-        fs.writeFileSync(SNAPSHOTS_FILE, JSON.stringify(data, null, 2), 'utf8');
-    } catch (error) {
-        console.warn('⚠️  Failed to save snapshots.');
     }
 }
 
@@ -205,85 +223,143 @@ function enrichWarEntry(entry, source) {
     return entry;
 }
 
-function attachMemberHistory(memberList) {
+async function attachMemberHistory(memberList) {
     const now = new Date().toISOString();
-    const historyData = loadMemberHistory();
-    const history = historyData.items;
-    const historyMap = new Map(history.map(item => [item.tag, item]));
-    const isFirstRun = history.length === 0 && !historyData.seededAt;
-    const seededAt = historyData.seededAt || (isFirstRun ? now : null);
+    
+    try {
+        const allMembers = await db.getMembers(true); // Get all members (current + former)
+        const historyMap = new Map(allMembers.map(item => [item.tag, item]));
+        const isFirstRun = allMembers.length === 0;
 
-    const enriched = memberList.map(member => {
-        const existing = historyMap.get(member.tag);
-        const firstSeen = existing?.firstSeen || now;
-        const joinedAt = existing?.joinedAt || now;
-        const tenureKnown = existing?.tenureKnown ?? !isFirstRun;
-        historyMap.set(member.tag, {
-            tag: member.tag,
-            firstSeen,
-            joinedAt,
-            lastSeen: now,
-            name: member.name,
-            role: member.role,
-            tenureKnown
-        });
-        return { ...member, firstSeen, joinedAt, tenureKnown, isCurrent: true };
-    });
+        const enriched = [];
+        for (const member of memberList) {
+            const existing = historyMap.get(member.tag);
+            const firstSeen = existing?.firstSeen || now;
+            const joinedAt = existing?.joinedAt || now;
+            const tenureKnown = existing?.tenureKnown ?? !isFirstRun;
 
-    saveMemberHistory(Array.from(historyMap.values()), seededAt);
-    return enriched;
+            // Upsert member in database
+            await db.upsertMember({
+                tag: member.tag,
+                name: member.name,
+                role: member.role,
+                firstSeen: existing?.firstSeen || now,
+                joinedAt: existing?.joinedAt || now,
+                lastSeen: now,
+                tenureKnown,
+                isCurrent: true
+            });
+
+            enriched.push({ ...member, firstSeen, joinedAt, tenureKnown, isCurrent: true });
+        }
+
+        // Mark former members as not current
+        const currentTags = new Set(memberList.map(m => m.tag));
+        for (const [tag, member] of historyMap) {
+            if (!currentTags.has(tag) && member.isCurrent) {
+                await db.updateMemberCurrentStatus(tag, false);
+            }
+        }
+
+        return enriched;
+    } catch (error) {
+        console.warn('⚠️  Failed to attach member history from database:', error.message);
+        // Fallback: return members without history
+        return memberList.map(m => ({
+            ...m,
+            firstSeen: now,
+            joinedAt: now,
+            tenureKnown: false,
+            isCurrent: true
+        }));
+    }
 }
 
-function getMemberHistoryList(currentMembers) {
-    const historyData = loadMemberHistory();
-    const history = historyData.items;
-    const currentMap = new Map(currentMembers.map(member => [member.tag, member]));
+async function getMemberHistoryList(currentMembers) {
+    try {
+        const allMembers = await db.getMembers(true); // Include former members
+        const currentMap = new Map(currentMembers.map(member => [member.tag, member]));
 
-    const formerMembers = history
-        .filter(item => !currentMap.has(item.tag))
-        .map(item => ({
-            tag: item.tag,
-            name: item.name || item.tag,
-            role: item.role || 'member',
-            firstSeen: item.firstSeen,
-            joinedAt: item.joinedAt || item.firstSeen,
-            tenureKnown: item.tenureKnown ?? false,
-            isCurrent: false
-        }));
+        const formerMembers = allMembers
+            .filter(item => !currentMap.has(item.tag))
+            .map(item => ({
+                tag: item.tag,
+                name: item.name || item.tag,
+                role: item.role || 'member',
+                firstSeen: item.firstSeen,
+                joinedAt: item.joinedAt || item.firstSeen,
+                tenureKnown: item.tenureKnown ?? false,
+                isCurrent: false
+            }));
 
-    return currentMembers.concat(formerMembers);
+        return currentMembers.concat(formerMembers);
+    } catch (error) {
+        console.warn('⚠️  Failed to get member history list from database:', error.message);
+        return currentMembers; // Fallback to current members only
+    }
 }
 
 function getWarEntryKey(entry) {
     return entry.endDate || entry.createdDate || '';
 }
 
-function upsertWarEntry(entry, history) {
+async function upsertWarEntry(entry, history) {
     const key = getWarEntryKey(entry);
     if (!key) return history;
 
-    const existingIndex = history.findIndex(item => getWarEntryKey(item) === key);
-    if (existingIndex >= 0) {
-        const existing = history[existingIndex];
-        const mergedEntry = { ...existing, ...entry };
-        if (existing.rawParticipants || entry.rawParticipants) {
-            mergedEntry.rawParticipants = mergeParticipantLists(entry.rawParticipants || [], existing.rawParticipants || []);
+    try {
+        // Upsert war week
+        const warWeek = await db.upsertWarWeek({
+            seasonId: entry.seasonId || null,
+            sectionIndex: entry.sectionIndex || null,
+            periodIndex: entry.periodIndex || null,
+            startDate: entry.startDate || entry.createdDate,
+            endDate: entry.endDate || entry.createdDate,
+            createdDate: entry.createdDate || null,
+            dataSource: entry.dataSource || entry.source || 'riverrace'
+        });
+
+        // Upsert participants
+        if (entry.participants && Array.isArray(entry.participants)) {
+            for (const participant of entry.participants) {
+                await db.upsertParticipant({
+                    warWeekId: warWeek.id,
+                    memberTag: participant.tag,
+                    rank: participant.rank || null,
+                    warPoints: participant.warPoints || participant.fame || null,
+                    decksUsed: participant.decksUsed || participant.battlesPlayed || null,
+                    boatAttacks: participant.boatAttacks || null,
+                    trophies: participant.trophies || null,
+                    rawData: participant // Store full participant object
+                });
+            }
         }
-        if (existing.participants || entry.participants) {
-            mergedEntry.participants = mergeParticipantLists(entry.participants || [], existing.participants || []);
+
+        // Update in-memory cache
+        const existingIndex = history.findIndex(item => getWarEntryKey(item) === key);
+        if (existingIndex >= 0) {
+            const existing = history[existingIndex];
+            const mergedEntry = { ...existing, ...entry };
+            if (existing.rawParticipants || entry.rawParticipants) {
+                mergedEntry.rawParticipants = mergeParticipantLists(entry.rawParticipants || [], existing.rawParticipants || []);
+            }
+            if (existing.participants || entry.participants) {
+                mergedEntry.participants = mergeParticipantLists(entry.participants || [], existing.participants || []);
+            }
+            history[existingIndex] = mergedEntry;
+        } else {
+            history.push(entry);
         }
-        history[existingIndex] = mergedEntry;
-    } else {
-        history.push(entry);
+
+        // Sort newest first
+        history.sort((a, b) => new Date(b.endDate || b.createdDate) - new Date(a.endDate || a.createdDate));
+
+        // Keep a maximum of HISTORY_MAX_WEEKS entries
+        return history.slice(0, HISTORY_MAX_WEEKS);
+    } catch (error) {
+        console.warn('⚠️  Failed to upsert war entry to database:', error.message);
+        return history; // Return unchanged history on error
     }
-
-    // Sort newest first
-    history.sort((a, b) => new Date(b.endDate || b.createdDate) - new Date(a.endDate || a.createdDate));
-
-    // Keep a maximum of HISTORY_MAX_WEEKS entries
-    const trimmed = history.slice(0, HISTORY_MAX_WEEKS);
-    saveWarHistory(trimmed);
-    return trimmed;
 }
 
 function mergeWarLogs(primary, secondary) {
@@ -298,7 +374,7 @@ function mergeWarLogs(primary, secondary) {
     return combined;
 }
 
-let warHistoryCache = loadWarHistory();
+let warHistoryCache = [];
 let warLogAvailable = false;
 let memberCache = { current: [], all: [] };
 let warLogCache = [];
@@ -560,20 +636,23 @@ async function refreshServerCache() {
 
     try {
         const clanData = await makeAPIRequestPromise(`/v1/clans/%23${CLAN_TAG}`);
-        const enriched = attachMemberHistory(clanData.memberList || []);
+        const enriched = await attachMemberHistory(clanData.memberList || []);
         memberCache.current = enriched;
-        memberCache.all = getMemberHistoryList(enriched);
+        memberCache.all = await getMemberHistoryList(enriched);
     } catch (error) {
         console.warn('⚠️  Cache refresh failed for members.');
     }
 
     try {
+        // Load existing war history from database
+        warHistoryCache = await loadWarHistory();
+        
         const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
         const data = await makeAPIRequestPromise(warlogEndpoint);
         const items = (data.items || []).map(item => enrichWarEntry(item, 'warlog'));
-        items.forEach(entry => {
-            warHistoryCache = upsertWarEntry(entry, warHistoryCache);
-        });
+        for (const entry of items) {
+            warHistoryCache = await upsertWarEntry(entry, warHistoryCache);
+        }
         warLogAvailable = true;
         const combined = mergeWarLogs(items, warHistoryCache);
         warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
@@ -581,12 +660,15 @@ async function refreshServerCache() {
         warLogAvailable = false;
         if (error.message.includes('disabled') || error.message.includes('notFound')) {
             try {
+                // Load existing war history from database
+                warHistoryCache = await loadWarHistory();
+                
                 const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
                 const riverData = await makeAPIRequestPromise(riverRaceEndpoint);
                 const currentEntries = convertRiverRaceToWarLog(riverData);
-                currentEntries.forEach(entry => {
-                    warHistoryCache = upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
-                });
+                for (const entry of currentEntries) {
+                    warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
+                }
                 const combined = mergeWarLogs(currentEntries, warHistoryCache);
                 warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
             } catch (riverError) {
@@ -634,26 +716,26 @@ function setSecurityHeaders(res) {
 // Periodically capture current river race data to build history locally
 const HISTORY_CAPTURE_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-function captureCurrentWeek() {
+async function captureCurrentWeek() {
     if (!API_KEY || !isValidApiKey(API_KEY)) {
         return;
     }
 
     const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
-    makeAPIRequest(riverRaceEndpoint, (err, riverData) => {
+    makeAPIRequest(riverRaceEndpoint, async (err, riverData) => {
         if (err) {
             console.warn('⚠️  Failed to capture current river race data.');
             return;
         }
 
-            const currentEntries = convertRiverRaceToWarLog(riverData);
-        currentEntries.forEach(entry => {
-            warHistoryCache = upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
-        });
+        const currentEntries = convertRiverRaceToWarLog(riverData);
+        for (const entry of currentEntries) {
+            warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
+        }
     });
 }
 
-function captureWarSnapshotsWindow() {
+async function captureWarSnapshotsWindow() {
     if (!API_KEY || !isValidApiKey(API_KEY)) {
         return;
     }
@@ -664,7 +746,7 @@ function captureWarSnapshotsWindow() {
     }
 
     const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
-    makeAPIRequest(riverRaceEndpoint, (err, riverData) => {
+    makeAPIRequest(riverRaceEndpoint, async (err, riverData) => {
         if (err || !riverData?.clan?.participants) {
             console.warn('⚠️  Snapshot capture failed.');
             return;
@@ -674,42 +756,49 @@ function captureWarSnapshotsWindow() {
         const weekKey = getCurrentWarEndKey();
         const timestamp = new Date().toISOString();
 
-        const snapshots = loadSnapshots();
-        if (!snapshots.weeks[weekKey]) {
-            snapshots.weeks[weekKey] = { samples: [], preReset: null };
-        }
-
-        const totalFame = participants.reduce((sum, p) => sum + (p.warPoints || 0), 0);
-        const sample = { timestamp, totalFame, participants };
-        snapshots.weeks[weekKey].samples.push(sample);
-
-        // If data resets to zero, keep the last non-zero sample as preReset
-        if (totalFame === 0) {
-            const previous = snapshots.weeks[weekKey].samples.slice(-2, -1)[0];
-            if (previous && previous.totalFame > 0) {
-                snapshots.weeks[weekKey].preReset = previous;
+        try {
+            // Get or create war week for this snapshot
+            let warWeek = await db.getWarWeekByEndDate(weekKey);
+            if (!warWeek) {
+                warWeek = await db.upsertWarWeek({
+                    endDate: weekKey,
+                    startDate: weekKey, // Will be updated later
+                    dataSource: 'snapshot'
+                });
             }
-        }
 
-        saveSnapshots(snapshots);
+            const totalFame = participants.reduce((sum, p) => sum + (p.warPoints || 0), 0);
+            const snapshotData = {
+                timestamp,
+                totalFame,
+                participants,
+                rawData: riverData
+            };
+
+            await db.saveSnapshot(warWeek.id, timestamp, snapshotData);
+        } catch (error) {
+            console.warn('⚠️  Failed to save snapshot to database:', error.message);
+        }
     });
 }
 
-function checkWarLogAvailability() {
+async function checkWarLogAvailability() {
     if (!API_KEY || !isValidApiKey(API_KEY)) {
         return;
     }
 
     const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
-    makeAPIRequest(warlogEndpoint, (err, data) => {
+    makeAPIRequest(warlogEndpoint, async (err, data) => {
         if (!err && data && Array.isArray(data.items)) {
             if (!warLogAvailable) {
                 console.log('✅ War log endpoint is available again.');
             }
             warLogAvailable = true;
-            data.items.forEach(entry => {
-                warHistoryCache = upsertWarEntry(enrichWarEntry(entry, 'warlog'), warHistoryCache);
-            });
+            // Load existing cache first
+            warHistoryCache = await loadWarHistory();
+            for (const entry of data.items) {
+                warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'warlog'), warHistoryCache);
+            }
             return;
         }
 
@@ -763,9 +852,26 @@ const server = http.createServer((req, res) => {
     serveStaticFile(filePath, res);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
     console.log(`Server running at http://localhost:${PORT}/`);
     console.log(`Clan Tag: #${CLAN_TAG}`);
+    
+    // Initialize database schema
+    try {
+        await db.initializeSchema();
+        console.log('✅ Database initialized\n');
+    } catch (error) {
+        console.error('❌ Failed to initialize database:', error.message);
+        console.error('   Server will continue but database operations may fail.\n');
+    }
+    
+    // Load initial cache from database
+    try {
+        warHistoryCache = await loadWarHistory();
+        console.log(`📊 Loaded ${warHistoryCache.length} war weeks from database`);
+    } catch (error) {
+        console.warn('⚠️  Failed to load initial war history:', error.message);
+    }
     
     // SECURITY: Never log the API key, only confirm if it's set
     if (!API_KEY || !isValidApiKey(API_KEY)) {
