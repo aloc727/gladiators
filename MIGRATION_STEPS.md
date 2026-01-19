@@ -30,9 +30,14 @@ sudo systemctl enable postgresql  # Auto-start on boot
 
 # Verify it's running
 sudo systemctl status postgresql
+
+# Also check the actual PostgreSQL cluster (this is what matters)
+sudo systemctl status postgresql@14-main
 ```
 
-**Expected output:** Should show "active (running)" in green.
+**Expected output:** 
+- `postgresql.service` may show "active (exited)" - this is **normal** (it's a meta-service)
+- `postgresql@14-main` should show "active (running)" - this is the actual database server
 
 ---
 
