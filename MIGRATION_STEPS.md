@@ -159,23 +159,40 @@ npm install
 
 ## Step 8: Update .env File
 
+**Option 1: Automatic (no editor - RECOMMENDED):**
 ```bash
-# Edit .env file
-nano .env
-```
+cd ~/gladiators
 
-**Add these lines** (keep your existing CLASH_ROYALE_API_KEY):
-```
+# Add database config to .env file (keeps existing CLASH_ROYALE_API_KEY)
+cat >> .env << 'EOF'
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=gladiators
 DB_USER=gladiators_user
 DB_PASSWORD=your_secure_password_here
+EOF
+```
+
+**Replace `your_secure_password_here`** with the password from Step 3 before running.
+
+**Option 2: Using echo (if Option 1 doesn't work):**
+```bash
+cd ~/gladiators
+echo "DB_HOST=localhost" >> .env
+echo "DB_PORT=5432" >> .env
+echo "DB_NAME=gladiators" >> .env
+echo "DB_USER=gladiators_user" >> .env
+echo "DB_PASSWORD=your_secure_password_here" >> .env
 ```
 
 **Replace `your_secure_password_here`** with the password from Step 3.
 
-**Save and exit:** `Ctrl+X`, then `Y`, then `Enter`
+**Verify it worked:**
+```bash
+cat .env
+```
+
+You should see your CLASH_ROYALE_API_KEY plus the new DB_* lines.
 
 ---
 
