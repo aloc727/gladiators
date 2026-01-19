@@ -47,11 +47,23 @@ sudo systemctl status postgresql@14-main
 # Switch to home directory first (avoids permission warning)
 cd ~
 
-# Switch to postgres user
+# Switch to postgres user (ignore the permission denied warning - it's harmless)
 sudo -u postgres psql
 ```
 
 **You should see:** `postgres=#` prompt (this means you're in psql, ready for SQL commands)
+
+**If you don't see the prompt**, try this instead:
+```bash
+sudo -u postgres psql -d postgres
+```
+
+**Or check if PostgreSQL cluster is running:**
+```bash
+sudo systemctl status postgresql@14-main
+# If not running, start it:
+sudo systemctl start postgresql@14-main
+```
 
 **In the psql prompt**, run these commands (copy/paste all at once):
 
