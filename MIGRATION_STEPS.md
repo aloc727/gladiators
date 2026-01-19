@@ -89,27 +89,29 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO gladiators_user
 
 ## Step 4: Configure PostgreSQL Authentication
 
+**Option 1: Automatic (no editor needed - RECOMMENDED):**
 ```bash
-# Edit PostgreSQL config
-sudo nano /etc/postgresql/14/main/pg_hba.conf
-```
+# Add md5 authentication line automatically
+echo "local   all             all                                     md5" | sudo tee -a /etc/postgresql/14/main/pg_hba.conf
 
-**Find this line** (around line 90):
-```
-local   all             all                                     peer
-```
-
-**Add this line** right after it:
-```
-local   all             all                                     md5
-```
-
-**Save and exit:** `Ctrl+X`, then `Y`, then `Enter`
-
-**Restart PostgreSQL:**
-```bash
+# Restart PostgreSQL
 sudo systemctl restart postgresql
 ```
+
+**Option 2: If Option 1 doesn't work, try this:**
+```bash
+# Backup the file first
+sudo cp /etc/postgresql/14/main/pg_hba.conf /etc/postgresql/14/main/pg_hba.conf.backup
+
+# Add the line using sed (inserts after the "peer" line)
+sudo sed -i '/local   all             all                                     peer/a local   all             all                                     md5' /etc/postgresql/14/main/pg_hba.conf
+
+# Restart PostgreSQL
+sudo systemctl restart postgresql
+```
+
+**Option 3: Skip this step (try Step 5 first)**
+If you get connection errors in Step 5, come back to this. Some PostgreSQL setups already allow password auth.
 
 ---
 
