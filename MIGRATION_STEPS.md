@@ -44,9 +44,14 @@ sudo systemctl status postgresql@14-main
 ## Step 3: Create Database and User
 
 ```bash
+# Switch to home directory first (avoids permission warning)
+cd ~
+
 # Switch to postgres user
 sudo -u postgres psql
 ```
+
+**You should see:** `postgres=#` prompt (this means you're in psql, ready for SQL commands)
 
 **In the psql prompt**, run these commands (copy/paste all at once):
 
