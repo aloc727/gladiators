@@ -3,10 +3,10 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
-const db = require('./db');
 
 // SECURITY: Load environment variables from .env file if it exists
 // NEVER commit .env to version control!
+// MUST load .env BEFORE requiring db.js so database connection has credentials
 if (fs.existsSync('.env')) {
     const envContent = fs.readFileSync('.env', 'utf8');
     envContent.split('\n').forEach(line => {
@@ -20,6 +20,9 @@ if (fs.existsSync('.env')) {
         }
     });
 }
+
+// Load db.js AFTER .env is loaded
+const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
 const CLAN_TAG = '2CPPJLJ';
