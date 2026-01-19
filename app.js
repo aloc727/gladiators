@@ -459,8 +459,9 @@ function processWarData(members, warLog) {
     // Initialize all players with 0 for each date column
     filteredColumns.forEach(column => {
         playersMap.forEach(player => {
-            player.scores[column.label] = 0;
-            player.decksUsed[column.label] = 0;
+            // Default to N/A when no data exists for a week.
+            player.scores[column.label] = null;
+            player.decksUsed[column.label] = null;
         });
     });
 
