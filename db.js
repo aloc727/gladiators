@@ -272,24 +272,46 @@ async function initializeSchema() {
     const schemaPath = path.join(__dirname, 'db', 'schema-postgres.sql');
     const schema = fs.readFileSync(schemaPath, 'utf8');
     
-    // Split by semicolons and execute each statement
+    // Remove comments and split by semicolons
     const statements = schema
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.startsWith('--'))
+        .join('\n')
         .split(';')
         .map(s => s.trim())
-        .filter(s => s.length > 0 && !s.startsWith('--'));
+        .filter(s => s.length > 0);
     
     for (const statement of statements) {
         try {
             await pool.query(statement);
         } catch (error) {
             // Ignore "already exists" errors
-            if (!error.message.includes('already exists')) {
+            if (error.message.includes('already exists')) {
+                // Table/index already exists, that's fine
+                continue;
+            }
+            // For other errors, log but continue (might be dependency issues)
+            if (!error.message.includes('does not exist')) {
                 console.warn('Schema initialization warning:', error.message);
             }
         }
     }
     
-    console.log('✅ Database schema initialized');
+    // Verify tables were created
+    const tables = await pool.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name IN ('members', 'war_weeks', 'war_participants', 'war_snapshots')
+    `);
+    
+    if (tables.rows.length === 4) {
+        console.log('✅ Database schema initialized (all tables created)');
+    } else {
+        console.log(`⚠️  Database schema initialized, but only ${tables.rows.length}/4 tables found`);
+        console.log('   Found tables:', tables.rows.map(r => r.table_name).join(', '));
+    }
 }
 
 async function close() {
