@@ -1188,6 +1188,8 @@ function renderDashboard() {
     const demotionThreshold = getDemotionThreshold();
     const demotionList = demotionThreshold ? players
         .filter(player => {
+            // Only include current members
+            if (!player.isCurrent) return false;
             const role = (player.role || '').toLowerCase();
             if (role !== 'member' && role !== 'elder') return false;
             const score = player.scores[currentColumn.label];
