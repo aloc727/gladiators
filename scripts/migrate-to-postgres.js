@@ -16,8 +16,9 @@ const fs = require('fs');
 const path = require('path');
 
 // Load .env file before requiring db.js
-if (fs.existsSync('.env')) {
-    const envContent = fs.readFileSync('.env', 'utf8');
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
     envContent.split('\n').forEach(line => {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith('#')) {
@@ -29,6 +30,9 @@ if (fs.existsSync('.env')) {
         }
     });
 }
+
+// Debug: Check if password is loaded
+console.log('🔍 Debug: DB_PASSWORD loaded:', process.env.DB_PASSWORD ? `Yes (length: ${process.env.DB_PASSWORD.length})` : 'No');
 
 const db = require('../db');
 
