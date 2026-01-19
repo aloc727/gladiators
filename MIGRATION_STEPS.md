@@ -43,26 +43,30 @@ sudo systemctl status postgresql@14-main
 
 ## Step 3: Create Database and User
 
+**Option 1: Use /tmp directory (recommended if you get permission errors):**
 ```bash
-# Switch to home directory first (avoids permission warning)
-cd ~
-
-# Switch to postgres user (ignore the permission denied warning - it's harmless)
+cd /tmp
 sudo -u postgres psql
+```
+
+**Option 2: Use explicit connection (alternative):**
+```bash
+sudo -u postgres env PWD=/tmp psql
+```
+
+**Option 3: Connect directly to postgres database:**
+```bash
+sudo -u postgres psql postgres
 ```
 
 **You should see:** `postgres=#` prompt (this means you're in psql, ready for SQL commands)
 
-**If you don't see the prompt**, try this instead:
-```bash
-sudo -u postgres psql -d postgres
-```
-
-**Or check if PostgreSQL cluster is running:**
+**If you still don't see the prompt**, check PostgreSQL is running:
 ```bash
 sudo systemctl status postgresql@14-main
 # If not running, start it:
 sudo systemctl start postgresql@14-main
+# Then try again
 ```
 
 **In the psql prompt**, run these commands (copy/paste all at once):
