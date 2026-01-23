@@ -174,6 +174,19 @@ async function loadData() {
         // Process data
         const processedData = processWarData(members, warLog);
         
+        // Debug: Log data summary
+        console.log('Data loaded:', {
+            members: members.length,
+            warLog: warLog.length,
+            processedPlayers: processedData.players.length,
+            processedColumns: processedData.columns.length,
+            samplePlayer: processedData.players[0] ? {
+                name: processedData.players[0].name,
+                scoresCount: Object.keys(processedData.players[0].scores).length,
+                sampleScores: Object.entries(processedData.players[0].scores).slice(0, 3)
+            } : null
+        });
+        
         // Store and render view
         latestData = processedData;
         renderView();
