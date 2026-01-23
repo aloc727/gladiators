@@ -523,26 +523,33 @@ function processWarData(members, warLog) {
                 player = playersByName.get(participant.name.toLowerCase()) || null;
             }
             if (!player) {
-                // Debug: log unmatched participants
-                console.warn('No player found for participant:', tag || participant.name);
-                return;
-            }
-
-            // Handle null/undefined explicitly
-            if (participant.warPoints === null || participant.warPoints === undefined) {
-                // Only set to null if explicitly null, not if it's 0
-                if (participant.warPoints === null) {
-                    player.scores[dateLabel] = null;
-                    player.decksUsed[dateLabel] = null;
+                // Debug: log unmatched participants (only in dev)
+                if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+                    console.warn('No player found for participant:', tag || participant.name);
                 }
                 return;
             }
 
-            const warPoints = participant.warPoints ??
-                             participant.fame ??
-                             participant.battlesPlayed ??
-                             participant.wins ??
-                             0;
+            // Get war points - handle null, undefined, and 0 differently
+            const warPoints = participant.warPoints !== null && participant.warPoints !== undefined 
+                ? participant.warPoints 
+                : (participant.fame !== null && participant.fame !== undefined 
+                    ? participant.fame 
+                    : (participant.battlesPlayed !== null && participant.battlesPlayed !== undefined
+                        ? participant.battlesPlayed
+                        : (participant.wins !== null && participant.wins !== undefined
+                            ? participant.wins
+                            : null)));
+            
+            // If explicitly null, set to null (N/A)
+            if (warPoints === null) {
+                player.scores[dateLabel] = null;
+                player.decksUsed[dateLabel] = participant.decksUsed !== null && participant.decksUsed !== undefined ? participant.decksUsed : null;
+                return;
+            }
+            
+            // Otherwise use the value (even if 0)
+            const finalWarPoints = warPoints || 0;
             const decksUsed = participant.decksUsed ??
                              participant.battlesPlayed ??
                              0;
