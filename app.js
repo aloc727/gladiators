@@ -971,15 +971,17 @@ function getVisibleColumns(columns) {
     }
     
     if (cutoffDate) {
-        return columns.filter(column => {
-            // Always include current week (first column)
-            if (column === columns[0]) return true;
-            // Include columns within the date range
-            return column.endDate && column.endDate >= cutoffDate;
-        });
+        // Filter other columns based on cutoffDate, ensuring current week is not re-added
+        for (let i = 1; i < columns.length; i++) {
+            if (columns[i].endDate && columns[i].endDate >= cutoffDate) {
+                visible.push(columns[i]);
+            } else {
+                // Since columns are sorted by date, we can stop once we hit an older one
+                break;
+            }
+        }
     }
-    
-    return columns;
+    return visible;
 }
 
 function renderView() {
