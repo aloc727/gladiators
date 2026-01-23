@@ -1288,13 +1288,14 @@ function getDemotionThreshold() {
     }
 
     // Monday 4:30am CT through Thursday 4:29am CT -> 1600 threshold
-    if (day >= 1 && day <= 3) {
-        if (day === 1 && minutes >= cutoff) {
-            return 1600; // Monday 4:30am or later
-        }
-        if (day > 1) {
-            return 1600; // Tuesday, Wednesday, or Thursday before 4:30am
-        }
+    if (day === 1 && minutes >= cutoff) {
+        return 1600; // Monday 4:30am or later
+    }
+    if (day >= 2 && day <= 3) {
+        return 1600; // Tuesday or Wednesday (any time)
+    }
+    if (day === 4 && minutes < cutoff) {
+        return 1600; // Thursday before 4:30am
     }
     
     return null; // Default to no demotion watch
