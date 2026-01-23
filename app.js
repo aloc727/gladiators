@@ -12,7 +12,8 @@ let nextRefreshTime = null; // Track when the next refresh is scheduled
 
 let latestData = null;
 let currentTab = 'table';
-let currentRange = '4weeks';
+// Initialize currentRange from localStorage or default to 'last4weeks'
+let currentRange = localStorage.getItem('currentRange') || 'last4weeks';
 let currentMembersOnly = true;
 let userSort = null;
 
@@ -73,9 +74,25 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.range-tab').forEach(b => b.classList.remove('active'));
             button.classList.add('active');
             currentRange = button.dataset.range;
+            // Save to localStorage
+            localStorage.setItem('currentRange', currentRange);
             renderView();
         });
     });
+    
+    // Restore saved range preference on page load
+    const savedRange = localStorage.getItem('currentRange');
+    if (savedRange) {
+        currentRange = savedRange;
+        // Update the active button
+        document.querySelectorAll('.range-tab').forEach(button => {
+            if (button.dataset.range === savedRange) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+    }
 
     // Member filter toggle (local only)
     const memberToggle = document.getElementById('currentMembersOnly');
@@ -926,24 +943,31 @@ function getVisibleColumns(columns) {
     }
     
     const now = new Date();
+    const currentWeekEndDate = columns[0]?.endDate; // The most recent war week's end date
+
+    // Always include the current week
+    const visible = currentWeekEndDate ? [columns[0]] : [];
+
     let cutoffDate = null;
-    
     switch (currentRange) {
-        case '4weeks':
+        case 'last4weeks':
             cutoffDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000);
             break;
-        case '8weeks':
+        case 'last8weeks':
             cutoffDate = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
             break;
-        case '12weeks':
+        case 'last12weeks':
             cutoffDate = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
             break;
-        case 'year':
+        case 'lastyear':
             cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
             break;
+        case 'all':
+            return columns; // Show all columns
         default:
             // Default to 4 weeks if unknown range
             cutoffDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000);
+            break;
     }
     
     if (cutoffDate) {
