@@ -499,6 +499,11 @@ function processWarData(members, warLog) {
     });
 
     // Update scores for participants
+    let matchedWars = 0;
+    let unmatchedWars = 0;
+    let totalParticipants = 0;
+    let matchedParticipants = 0;
+    
     dateMergedWars.forEach((war, index) => {
         // Find the matching column for this war by end date
         // Use a more lenient matching - match by end date within 24 hours
@@ -513,17 +518,30 @@ function processWarData(members, warLog) {
         });
         
         if (!column) {
-            console.warn('No matching column for war:', war.endDateObj, war.seasonId, war.periodIndex);
+            unmatchedWars++;
+            if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+                console.warn('No matching column for war:', {
+                    endDateObj: war.endDateObj,
+                    seasonId: war.seasonId,
+                    periodIndex: war.periodIndex,
+                    availableColumns: columns.map(c => ({ label: c.label, endDate: c.endDate }))
+                });
+            }
             return; // Skip if no matching column
         }
         
+        matchedWars++;
         const dateLabel = column.label;
         const participants = war.participants || war.standings || [];
         
         if (!participants || participants.length === 0) {
-            console.warn('No participants for war:', dateLabel);
+            if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+                console.warn('No participants for war:', dateLabel);
+            }
             return;
         }
+        
+        totalParticipants += participants.length;
         
         // Make sure this column is in filteredColumns
         if (!filteredColumns.find(col => col.label === dateLabel)) {
@@ -571,8 +589,20 @@ function processWarData(members, warLog) {
             
             player.scores[dateLabel] = finalWarPoints;
             player.decksUsed[dateLabel] = decksUsed;
+            matchedParticipants++;
         });
     });
+    
+    // Debug summary
+    if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+        console.log('Participant matching summary:', {
+            matchedWars,
+            unmatchedWars,
+            totalParticipants,
+            matchedParticipants,
+            unmatchedParticipants: totalParticipants - matchedParticipants
+        });
+    }
 
     // Apply N/A for weeks before a player's first seen date
     playersMap.forEach(player => {
