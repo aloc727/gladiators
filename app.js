@@ -12,8 +12,8 @@ let nextRefreshTime = null; // Track when the next refresh is scheduled
 
 let latestData = null;
 let currentTab = 'table';
-// Initialize currentRange from localStorage or default to 'last4weeks'
-let currentRange = localStorage.getItem('currentRange') || 'last4weeks';
+// Initialize currentRange from localStorage or default to 'all'
+let currentRange = localStorage.getItem('currentRange') || 'all';
 let currentMembersOnly = true;
 let userSort = null;
 
@@ -29,6 +29,12 @@ const UI_VERSION = 'v1.13.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
+    // Restore saved range preference BEFORE loading data
+    const savedRange = localStorage.getItem('currentRange');
+    if (savedRange) {
+        currentRange = savedRange;
+    }
+    
     // Try to load data on page load
     loadData();
 
