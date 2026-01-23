@@ -35,7 +35,16 @@ document.addEventListener('DOMContentLoaded', () => {
         currentRange = savedRange;
     }
     
-    // Try to load data on page load
+    // Update the active button immediately (before loadData)
+    document.querySelectorAll('.range-tab').forEach(button => {
+        if (button.dataset.range === currentRange) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
+    });
+    
+    // Try to load data on page load (after range is set)
     loadData();
 
     const versionEl = document.getElementById('uiVersion');
@@ -85,29 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
             renderView();
         });
     });
-    
-    // Restore saved range preference on page load (must happen before first loadData call)
-    const savedRange = localStorage.getItem('currentRange');
-    if (savedRange) {
-        currentRange = savedRange;
-        // Update the active button
-        document.querySelectorAll('.range-tab').forEach(button => {
-            if (button.dataset.range === savedRange) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
-        });
-    } else {
-        // If no saved preference, ensure the default button is active
-        document.querySelectorAll('.range-tab').forEach(button => {
-            if (button.dataset.range === currentRange) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
-        });
-    }
 
     // Member filter toggle (local only)
     const memberToggle = document.getElementById('currentMembersOnly');
