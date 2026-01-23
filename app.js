@@ -487,21 +487,30 @@ function processWarData(members, warLog) {
 
     // Update scores for participants
     dateMergedWars.forEach((war, index) => {
-        // Find the matching column for this war
+        // Find the matching column for this war by end date
+        // Use a more lenient matching - match by end date within 24 hours
         const column = columns.find(col => {
             if (col.war === war) return true;
-            // Match by end date (within 1 hour tolerance for timezone issues)
+            // Match by end date (within 24 hour tolerance for timezone/calculation differences)
             if (col.endDate && war.endDateObj) {
                 const timeDiff = Math.abs(col.endDate.getTime() - war.endDateObj.getTime());
-                return timeDiff < 60 * 60 * 1000; // 1 hour
+                return timeDiff < 24 * 60 * 60 * 1000; // 24 hours
             }
             return false;
         });
         
-        if (!column) return; // Skip if no matching column
+        if (!column) {
+            console.warn('No matching column for war:', war.endDateObj, war.seasonId, war.periodIndex);
+            return; // Skip if no matching column
+        }
         
         const dateLabel = column.label;
         const participants = war.participants || war.standings || [];
+        
+        if (!participants || participants.length === 0) {
+            console.warn('No participants for war:', dateLabel);
+            return;
+        }
         
         // Make sure this column is in filteredColumns
         if (!filteredColumns.find(col => col.label === dateLabel)) {
@@ -513,11 +522,19 @@ function processWarData(members, warLog) {
             if (!player && participant.name) {
                 player = playersByName.get(participant.name.toLowerCase()) || null;
             }
-            if (!player) return;
+            if (!player) {
+                // Debug: log unmatched participants
+                console.warn('No player found for participant:', tag || participant.name);
+                return;
+            }
 
-            if (participant.warPoints === null) {
-                player.scores[dateLabel] = null;
-                player.decksUsed[dateLabel] = null;
+            // Handle null/undefined explicitly
+            if (participant.warPoints === null || participant.warPoints === undefined) {
+                // Only set to null if explicitly null, not if it's 0
+                if (participant.warPoints === null) {
+                    player.scores[dateLabel] = null;
+                    player.decksUsed[dateLabel] = null;
+                }
                 return;
             }
 
