@@ -206,6 +206,12 @@ async function loadData() {
             warLog: warLog.length,
             processedPlayers: processedData.players.length,
             processedColumns: processedData.columns.length,
+            columnDates: processedData.columns.map(c => ({
+                label: c.label,
+                endDate: c.endDate,
+                endDateType: typeof c.endDate,
+                endDateValue: c.endDate instanceof Date ? c.endDate.toISOString() : c.endDate
+            })),
             samplePlayer: processedData.players[0] ? {
                 name: processedData.players[0].name,
                 scoresCount: Object.keys(processedData.players[0].scores).length,
@@ -982,7 +988,20 @@ function getVisibleColumns(columns) {
     if (cutoffDate) {
         // Filter other columns based on cutoffDate, ensuring current week is not re-added
         for (let i = 1; i < columns.length; i++) {
-            if (columns[i].endDate && columns[i].endDate >= cutoffDate) {
+            const columnEndDate = columns[i].endDate;
+            if (!columnEndDate) {
+                // Skip columns without endDate
+                continue;
+            }
+            
+            // Ensure we're comparing Date objects
+            const columnDate = columnEndDate instanceof Date ? columnEndDate : new Date(columnEndDate);
+            if (isNaN(columnDate.getTime())) {
+                // Invalid date, skip
+                continue;
+            }
+            
+            if (columnDate >= cutoffDate) {
                 visible.push(columns[i]);
             } else {
                 // Since columns are sorted by date, we can stop once we hit an older one
