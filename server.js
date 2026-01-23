@@ -311,12 +311,29 @@ async function upsertWarEntry(entry, history) {
     if (!key) return history;
 
     try {
+        // Calculate start date if not provided (Thursday 4:30am CT, 4 days before Monday end)
+        let startDate = entry.startDate;
+        if (!startDate && entry.endDate) {
+            const endDateObj = new Date(entry.endDate);
+            startDate = new Date(endDateObj);
+            startDate.setDate(endDateObj.getDate() - 4);
+            startDate.setHours(4, 30, 0, 0);
+            startDate = startDate.toISOString();
+        } else if (!startDate && entry.createdDate) {
+            // Fallback: calculate from createdDate
+            const endDateObj = new Date(entry.createdDate);
+            startDate = new Date(endDateObj);
+            startDate.setDate(endDateObj.getDate() - 4);
+            startDate.setHours(4, 30, 0, 0);
+            startDate = startDate.toISOString();
+        }
+        
         // Upsert war week
         const warWeek = await db.upsertWarWeek({
             seasonId: entry.seasonId || null,
             sectionIndex: entry.sectionIndex || null,
             periodIndex: entry.periodIndex || null,
-            startDate: entry.startDate || entry.createdDate,
+            startDate: startDate || entry.createdDate,
             endDate: entry.endDate || entry.createdDate,
             createdDate: entry.createdDate || null,
             dataSource: entry.dataSource || entry.source || 'riverrace'
@@ -481,13 +498,19 @@ function convertRiverRaceToWarLog(riverRaceData) {
         return [];
     }
     
-    // Get current date (Monday at 4:30am CT)
+    // Wars start Thursday 4:30am CT and end Monday 4:30am CT
+    // Calculate current week's Monday end date
     const now = new Date();
     const currentDay = now.getDay();
     const daysUntilMonday = (1 - currentDay + 7) % 7;
     const currentMonday = new Date(now);
     currentMonday.setDate(now.getDate() + daysUntilMonday);
     currentMonday.setHours(4, 30, 0, 0);
+    
+    // Calculate Thursday start date (4 days before Monday)
+    const startThursday = new Date(currentMonday);
+    startThursday.setDate(currentMonday.getDate() - 4);
+    startThursday.setHours(4, 30, 0, 0);
     
     // Convert participants to war log format (keep raw fields)
     const participants = riverRaceData.clan.participants;
@@ -496,6 +519,7 @@ function convertRiverRaceToWarLog(riverRaceData) {
     return [{
         participants: participants,
         createdDate: currentMonday.toISOString(),
+        startDate: startThursday.toISOString(),
         endDate: currentMonday.toISOString(),
         state: riverRaceData.state || 'unknown',
         seasonId: riverRaceData.seasonId,

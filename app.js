@@ -243,16 +243,24 @@ function formatWarDate(dateString) {
 }
 
 function formatWarRange(endDate) {
+    // Wars start Thursday 4:30am CT and end Monday 4:30am CT
+    // Calculate Thursday from Monday (go back 4 days: Mon->Sun->Sat->Fri->Thu)
     const startDate = new Date(endDate);
-    // Wars start on Thursday and end Monday (5-day span).
-    startDate.setDate(startDate.getDate() - 5);
-    return `${formatWarDate(startDate.toISOString())}-${formatWarDate(endDate.toISOString())}`;
+    startDate.setDate(startDate.getDate() - 4);
+    startDate.setHours(4, 30, 0, 0);
+    
+    // Ensure endDate is also at 4:30am
+    const endDateObj = new Date(endDate);
+    endDateObj.setHours(4, 30, 0, 0);
+    
+    return `${formatWarDate(startDate.toISOString())}-${formatWarDate(endDateObj.toISOString())}`;
 }
 
 function getSeasonWeekLabel(war) {
     const seasonId = war.seasonId ?? war.season?.id ?? null;
-    const weekIndex = Number.isInteger(war.sectionIndex) ? war.sectionIndex + 1
-        : Number.isInteger(war.periodIndex) ? war.periodIndex + 1
+    // periodIndex is the week number (1-5), sectionIndex is usually 0
+    const weekIndex = Number.isInteger(war.periodIndex) ? war.periodIndex
+        : Number.isInteger(war.sectionIndex) ? war.sectionIndex + 1
         : null;
     if (seasonId && weekIndex) {
         return `Season ${seasonId} Week ${weekIndex}`;
@@ -421,14 +429,18 @@ function processWarData(members, warLog) {
     const dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
 
     const columns = dateMergedWars.map((war, index) => {
-        const baseLabel = war.label || formatWarDate(war.endDateObj.toISOString());
+        const seasonWeek = getSeasonWeekLabel(war);
+        const range = formatWarRange(war.endDateObj);
+        
         if (index === 0) {
-            const seasonWeek = getSeasonWeekLabel(war);
-            const range = formatWarRange(war.endDateObj);
+            // Current week
             const currentLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
-            return { label: currentLabel, endDate: war.endDateObj, baseLabel };
+            return { label: currentLabel, endDate: war.endDateObj, baseLabel: currentLabel, war: war };
         }
-        return { label: baseLabel, endDate: war.endDateObj };
+        
+        // Historical weeks - always show season/week and date range
+        const historicalLabel = seasonWeek ? `${seasonWeek} (${range})` : range;
+        return { label: historicalLabel, endDate: war.endDateObj, baseLabel: historicalLabel, war: war };
     });
 
     const labelRangeRegex = /(\d{1,2}\/\d{1,2}\/\d{4})/g;
@@ -466,16 +478,24 @@ function processWarData(members, warLog) {
 
     // Update scores for participants
     dateMergedWars.forEach((war, index) => {
-        const baseLabel = war.label || formatWarDate(war.endDateObj.toISOString());
-        let dateLabel = index === 0 && CURRENT_WAR_LABEL ? CURRENT_WAR_LABEL : baseLabel;
-        if (index === 0) {
-            const column = filteredColumns[0];
-            if (column?.label) {
-                dateLabel = column.label;
+        // Find the matching column for this war
+        const column = columns.find(col => {
+            if (col.war === war) return true;
+            // Match by end date (within 1 hour tolerance for timezone issues)
+            if (col.endDate && war.endDateObj) {
+                const timeDiff = Math.abs(col.endDate.getTime() - war.endDateObj.getTime());
+                return timeDiff < 60 * 60 * 1000; // 1 hour
             }
-        }
+            return false;
+        });
+        
+        if (!column) return; // Skip if no matching column
+        
+        const dateLabel = column.label;
         const participants = war.participants || war.standings || [];
-        if (!filteredColumns.find(column => column.label === dateLabel)) {
+        
+        // Make sure this column is in filteredColumns
+        if (!filteredColumns.find(col => col.label === dateLabel)) {
             return;
         }
         participants.forEach(participant => {
@@ -1216,30 +1236,62 @@ function renderDashboard() {
     }
 
     const demotionThreshold = getDemotionThreshold();
-    const demotionList = demotionThreshold ? players
+    // Use last completed week (second column, index 1) for demotion watch
+    const lastCompletedColumn = allColumns.length > 1 ? allColumns[1] : null;
+    const demotionColumn = lastCompletedColumn || currentColumn;
+    
+    const demotionList = demotionThreshold && lastCompletedColumn ? players
         .filter(player => {
             // Only include current members
             if (!player.isCurrent) return false;
             const role = (player.role || '').toLowerCase();
             if (role !== 'member' && role !== 'elder') return false;
-            const score = player.scores[currentColumn.label];
+            const score = player.scores[demotionColumn.label];
             if (score === null || score === undefined) return false;
             return score < demotionThreshold;
         })
         .map(player => ({
             name: player.name,
             role: player.role,
-            score: player.scores[currentColumn.label]
+            score: player.scores[demotionColumn.label]
         }))
         .slice(0, 8) : [];
 
     if (demotionEl) {
+        let demotionMessage = '';
+        if (!demotionThreshold) {
+            // Calculate next demotion watch start (Thursday 4:30am CT)
+            const now = new Date();
+            const ctDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+            const currentDay = ctDate.getDay();
+            const currentHour = ctDate.getHours();
+            const currentMinute = ctDate.getMinutes();
+            
+            let daysUntilThursday = (4 - currentDay + 7) % 7;
+            if (currentDay === 4 && (currentHour < 4 || (currentHour === 4 && currentMinute < 30))) {
+                daysUntilThursday = 0; // Today is Thursday but before 4:30am
+            } else if (daysUntilThursday === 0 && (currentHour >= 4 && currentMinute >= 30)) {
+                daysUntilThursday = 7; // Already past Thursday 4:30am, next is next Thursday
+            }
+            
+            const nextThursday = new Date(ctDate);
+            nextThursday.setDate(ctDate.getDate() + daysUntilThursday);
+            nextThursday.setHours(4, 30, 0, 0);
+            const nextDateStr = nextThursday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+            
+            demotionMessage = `<li class="list-item">Demotion watch resets Thursday 4:30am CT (${nextDateStr}).</li>`;
+        } else if (demotionList.length === 0) {
+            demotionMessage = '<li class="list-item">No one flagged for demotion watch.</li>';
+        } else {
+            demotionMessage = demotionList.map(player => `
+                <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">${player.score} pts</span></li>
+            `).join('');
+        }
+        
         demotionEl.innerHTML = `
-            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below 1600 in a week, or co-leaders with 0 for 12 straight weeks.">?</span></h3>
+            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below 1600 in the last completed week, or co-leaders with 0 for 12 straight weeks. Based on last completed week through Thursday 4:30am CT.">?</span></h3>
             <ul class="list">
-                ${demotionThreshold ? (demotionList.length ? demotionList.map(player => `
-                    <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">${player.score} pts</span></li>
-                `).join('') : '<li class="list-item">No one flagged for this checkpoint.</li>') : '<li class="list-item">Demotion watch begins Sunday 4:30am CT.</li>'}
+                ${demotionMessage}
             </ul>
         `;
     }
