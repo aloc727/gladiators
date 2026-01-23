@@ -1350,26 +1350,73 @@ function renderDashboard() {
     }
 
     const demotionThreshold = getDemotionThreshold();
-    // Use last completed week (second column, index 1) for demotion watch
-    const lastCompletedColumn = allColumns.length > 1 ? allColumns[1] : null;
-    const demotionColumn = lastCompletedColumn || currentColumn;
+    // Use current week (first column) for demotion watch (active week)
+    const demotionColumn = currentColumn;
     
-    const demotionList = demotionThreshold && lastCompletedColumn ? players
-        .filter(player => {
-            // Only include current members
-            if (!player.isCurrent) return false;
-            const role = (player.role || '').toLowerCase();
-            if (role !== 'member' && role !== 'elder') return false;
-            const score = player.scores[demotionColumn.label];
-            if (score === null || score === undefined) return false;
-            return score < demotionThreshold;
-        })
-        .map(player => ({
-            name: player.name,
-            role: player.role,
-            score: player.scores[demotionColumn.label]
-        }))
-        .slice(0, 8) : [];
+    // Build demotion list based on threshold and role
+    const demotionList = [];
+    
+    if (demotionThreshold && demotionColumn) {
+        // Members and elders: check against threshold
+        const membersElders = players
+            .filter(player => {
+                // Only include current members
+                if (!player.isCurrent) return false;
+                const role = (player.role || '').toLowerCase();
+                if (role !== 'member' && role !== 'elder') return false;
+                const score = player.scores[demotionColumn.label];
+                if (score === null || score === undefined) return false;
+                return score < demotionThreshold;
+            })
+            .map(player => ({
+                name: player.name,
+                role: player.role,
+                score: player.scores[demotionColumn.label]
+            }));
+        
+        demotionList.push(...membersElders);
+        
+        // Co-leaders: check for 0 points for 12 consecutive weeks
+        const coLeaders = players
+            .filter(player => {
+                // Only include current members
+                if (!player.isCurrent) return false;
+                const role = (player.role || '').toLowerCase();
+                if (role !== 'coleader') return false;
+                
+                // Check last 12 weeks for consecutive 0s
+                const streakColumns = allColumns.slice(0, 12);
+                if (streakColumns.length < 12) return false;
+                
+                let consecutiveZeros = 0;
+                for (const column of streakColumns) {
+                    const score = player.scores[column.label];
+                    if (score === null || score === undefined) {
+                        consecutiveZeros = 0; // N/A breaks the streak
+                        break;
+                    }
+                    if (score === 0) {
+                        consecutiveZeros++;
+                    } else {
+                        consecutiveZeros = 0; // Non-zero breaks the streak
+                        break;
+                    }
+                }
+                
+                return consecutiveZeros >= 12;
+            })
+            .map(player => ({
+                name: player.name,
+                role: player.role,
+                score: 0, // Show 0 for co-leaders
+                weeks: 12
+            }));
+        
+        demotionList.push(...coLeaders);
+    }
+    
+    // Limit to 8 for display
+    const limitedDemotionList = demotionList.slice(0, 8);
 
     if (demotionEl) {
         let demotionMessage = '';
