@@ -531,34 +531,24 @@ function processWarData(members, warLog) {
     });
 
     // Update scores for participants
+    // Since columns are created from dateMergedWars in the same order, match by index
     let matchedWars = 0;
     let unmatchedWars = 0;
     let totalParticipants = 0;
     let matchedParticipants = 0;
     
-    dateMergedWars.forEach((war, index) => {
-        // Find the matching column for this war by end date
-        // Use a more lenient matching - match by end date within 24 hours
-        const column = columns.find(col => {
-            if (col.war === war) return true;
-            // Match by end date (within 24 hour tolerance for timezone/calculation differences)
-            if (col.endDate && war.endDateObj) {
-                const timeDiff = Math.abs(col.endDate.getTime() - war.endDateObj.getTime());
-                return timeDiff < 24 * 60 * 60 * 1000; // 24 hours
-            }
-            return false;
-        });
+    dateMergedWars.forEach((war, warIndex) => {
+        // Get the column at the same index (columns are created from dateMergedWars in same order)
+        const column = columns[warIndex];
         
         if (!column) {
             unmatchedWars++;
-            if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
-                console.warn('No matching column for war:', {
-                    endDateObj: war.endDateObj,
-                    seasonId: war.seasonId,
-                    periodIndex: war.periodIndex,
-                    availableColumns: columns.map(c => ({ label: c.label, endDate: c.endDate }))
-                });
-            }
+            console.warn('No column at index', warIndex, 'for war:', {
+                endDateObj: war.endDateObj,
+                seasonId: war.seasonId,
+                periodIndex: war.periodIndex,
+                totalColumns: columns.length
+            });
             return; // Skip if no matching column
         }
         
@@ -567,9 +557,7 @@ function processWarData(members, warLog) {
         const participants = war.participants || war.standings || [];
         
         if (!participants || participants.length === 0) {
-            if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
-                console.warn('No participants for war:', dateLabel);
-            }
+            console.warn('No participants for war:', dateLabel, war);
             return;
         }
         
@@ -586,10 +574,12 @@ function processWarData(members, warLog) {
                 player = playersByName.get(participant.name.toLowerCase()) || null;
             }
             if (!player) {
-                // Debug: log unmatched participants (only in dev)
-                if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
-                    console.warn('No player found for participant:', tag || participant.name);
-                }
+                // Debug: log unmatched participants
+                console.warn('No player found for participant:', {
+                    tag: tag || 'no tag',
+                    name: participant.name || 'no name',
+                    warLabel: dateLabel
+                });
                 return;
             }
 
@@ -625,16 +615,21 @@ function processWarData(members, warLog) {
         });
     });
     
-    // Debug summary
-    if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
-        console.log('Participant matching summary:', {
-            matchedWars,
-            unmatchedWars,
-            totalParticipants,
-            matchedParticipants,
-            unmatchedParticipants: totalParticipants - matchedParticipants
-        });
-    }
+    // Debug summary - always log to help diagnose
+    console.log('Participant matching summary:', {
+        totalWars: dateMergedWars.length,
+        totalColumns: columns.length,
+        matchedWars,
+        unmatchedWars,
+        totalParticipants,
+        matchedParticipants,
+        unmatchedParticipants: totalParticipants - matchedParticipants,
+        sampleWar: dateMergedWars[0] ? {
+            endDateObj: dateMergedWars[0].endDateObj,
+            participantsCount: (dateMergedWars[0].participants || []).length,
+            firstParticipant: dateMergedWars[0].participants?.[0]
+        } : null
+    });
 
     // Apply N/A for weeks before a player's first seen date
     playersMap.forEach(player => {
