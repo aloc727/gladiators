@@ -1275,19 +1275,29 @@ function getCentralTimeInfo() {
 function getDemotionThreshold() {
     const { day, hour, minute } = getCentralTimeInfo();
     const minutes = hour * 60 + minute;
-    const cutoff = 4 * 60 + 30;
+    const cutoff = 4 * 60 + 30; // 4:30 AM CT
+
+    // Thursday 4:30am CT through Sunday 4:29am CT -> No demotion watch (new week started)
+    if (day >= 4 || (day === 0 && minutes < cutoff)) {
+        return null;
+    }
 
     // Sunday 4:30am CT through Monday 4:29am CT -> 700 point threshold
     if ((day === 0 && minutes >= cutoff) || (day === 1 && minutes < cutoff)) {
         return 700;
     }
 
-    // Monday 4:30am CT and later -> 1600 threshold
-    if (day === 1 && minutes >= cutoff) {
-        return 1600;
+    // Monday 4:30am CT through Thursday 4:29am CT -> 1600 threshold
+    if (day >= 1 && day <= 3) {
+        if (day === 1 && minutes >= cutoff) {
+            return 1600; // Monday 4:30am or later
+        }
+        if (day > 1) {
+            return 1600; // Tuesday, Wednesday, or Thursday before 4:30am
+        }
     }
-
-    return null;
+    
+    return null; // Default to no demotion watch
 }
 
 function renderDashboard() {
@@ -1421,36 +1431,62 @@ function renderDashboard() {
     if (demotionEl) {
         let demotionMessage = '';
         if (!demotionThreshold) {
-            // Calculate next demotion watch start (Thursday 4:30am CT)
+            // No demotion watch active (Thursday 4:30am CT through Sunday 4:29am CT)
+            // Calculate next demotion watch start (Sunday 4:30am CT)
             const now = new Date();
             const ctDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
             const currentDay = ctDate.getDay();
             const currentHour = ctDate.getHours();
             const currentMinute = ctDate.getMinutes();
             
-            let daysUntilThursday = (4 - currentDay + 7) % 7;
-            if (currentDay === 4 && (currentHour < 4 || (currentHour === 4 && currentMinute < 30))) {
-                daysUntilThursday = 0; // Today is Thursday but before 4:30am
-            } else if (daysUntilThursday === 0 && (currentHour >= 4 && currentMinute >= 30)) {
-                daysUntilThursday = 7; // Already past Thursday 4:30am, next is next Thursday
+            let daysUntilSunday = (0 - currentDay + 7) % 7;
+            if (currentDay === 0 && (currentHour < 4 || (currentHour === 4 && currentMinute < 30))) {
+                daysUntilSunday = 0; // Today is Sunday but before 4:30am
+            }
+            if (currentDay === 0 && currentHour >= 4 && currentMinute >= 30) {
+                daysUntilSunday = 7; // Today is Sunday after 4:30am, so next Sunday is 7 days away
+            }
+            if (currentDay >= 1 && currentDay <= 3) {
+                // Monday-Thursday: next Sunday is 7 - currentDay days away
+                daysUntilSunday = 7 - currentDay;
+            }
+            if (currentDay === 4) {
+                // Thursday: next Sunday is 3 days away
+                daysUntilSunday = 3;
+            }
+            if (currentDay === 5) {
+                // Friday: next Sunday is 2 days away
+                daysUntilSunday = 2;
+            }
+            if (currentDay === 6) {
+                // Saturday: next Sunday is 1 day away
+                daysUntilSunday = 1;
             }
             
-            const nextThursday = new Date(ctDate);
-            nextThursday.setDate(ctDate.getDate() + daysUntilThursday);
-            nextThursday.setHours(4, 30, 0, 0);
-            const nextDateStr = nextThursday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+            const nextSunday = new Date(ctDate);
+            nextSunday.setDate(ctDate.getDate() + daysUntilSunday);
+            nextSunday.setHours(4, 30, 0, 0);
             
-            demotionMessage = `<li class="list-item">Demotion watch resets Thursday 4:30am CT (${nextDateStr}).</li>`;
-        } else if (demotionList.length === 0) {
+            const nextDateStr = nextSunday.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'America/Chicago'
+            });
+            demotionMessage = `<li class="list-item">Demotion watch will update Sunday 4:30am CT (${nextDateStr}).</li>`;
+        } else if (limitedDemotionList.length === 0) {
             demotionMessage = '<li class="list-item">No one flagged for demotion watch.</li>';
         } else {
-            demotionMessage = demotionList.map(player => `
-                <li class="list-item"><span>${player.name} (${formatRole(player.role)})</span><span class="badge badge-demote">${player.score} pts</span></li>
-            `).join('');
+            demotionMessage = limitedDemotionList.map(player => {
+                const badgeText = player.weeks ? `0 pts x${player.weeks}` : `${player.score} pts`;
+                return `<li class="list-item"><span>${player.name}</span><span class="badge badge-demote">${badgeText}</span></li>`;
+            }).join('');
         }
         
         demotionEl.innerHTML = `
-            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below 1600 in the last completed week, or co-leaders with 0 for 12 straight weeks. Based on last completed week through Thursday 4:30am CT.">?</span></h3>
+            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week, or co-leaders with 0 for 12 straight weeks.">?</span></h3>
             <ul class="list">
                 ${demotionMessage}
             </ul>
