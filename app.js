@@ -550,10 +550,13 @@ function processWarData(members, warLog) {
             
             // Otherwise use the value (even if 0)
             const finalWarPoints = warPoints || 0;
-            const decksUsed = participant.decksUsed ??
-                             participant.battlesPlayed ??
-                             0;
-            player.scores[dateLabel] = warPoints;
+            const decksUsed = participant.decksUsed !== null && participant.decksUsed !== undefined
+                ? participant.decksUsed
+                : (participant.battlesPlayed !== null && participant.battlesPlayed !== undefined
+                    ? participant.battlesPlayed
+                    : null);
+            
+            player.scores[dateLabel] = finalWarPoints;
             player.decksUsed[dateLabel] = decksUsed;
         });
     });
