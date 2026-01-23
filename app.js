@@ -80,13 +80,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    // Restore saved range preference on page load
+    // Restore saved range preference on page load (must happen before first loadData call)
     const savedRange = localStorage.getItem('currentRange');
     if (savedRange) {
         currentRange = savedRange;
         // Update the active button
         document.querySelectorAll('.range-tab').forEach(button => {
             if (button.dataset.range === savedRange) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+    } else {
+        // If no saved preference, ensure the default button is active
+        document.querySelectorAll('.range-tab').forEach(button => {
+            if (button.dataset.range === currentRange) {
                 button.classList.add('active');
             } else {
                 button.classList.remove('active');
