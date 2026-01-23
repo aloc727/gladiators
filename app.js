@@ -242,18 +242,23 @@ function formatWarDate(dateString) {
     return `${month}/${day}/${year}`;
 }
 
-function formatWarRange(endDate) {
+function formatWarRange(endDate, startDate = null) {
     // Wars start Thursday 4:30am CT and end Monday 4:30am CT
-    // Calculate Thursday from Monday (go back 4 days: Mon->Sun->Sat->Fri->Thu)
-    const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - 4);
-    startDate.setHours(4, 30, 0, 0);
+    let startDateObj;
+    if (startDate) {
+        startDateObj = new Date(startDate);
+    } else {
+        // Calculate Thursday from Monday (go back 4 days: Mon->Sun->Sat->Fri->Thu)
+        startDateObj = new Date(endDate);
+        startDateObj.setDate(startDateObj.getDate() - 4);
+        startDateObj.setHours(4, 30, 0, 0);
+    }
     
     // Ensure endDate is also at 4:30am
     const endDateObj = new Date(endDate);
     endDateObj.setHours(4, 30, 0, 0);
     
-    return `${formatWarDate(startDate.toISOString())}-${formatWarDate(endDateObj.toISOString())}`;
+    return `${formatWarDate(startDateObj.toISOString())}-${formatWarDate(endDateObj.toISOString())}`;
 }
 
 function getSeasonWeekLabel(war) {
@@ -430,7 +435,8 @@ function processWarData(members, warLog) {
 
     const columns = dateMergedWars.map((war, index) => {
         const seasonWeek = getSeasonWeekLabel(war);
-        const range = formatWarRange(war.endDateObj);
+        // Use startDate from war if available, otherwise calculate it
+        const range = formatWarRange(war.endDateObj, war.startDate);
         
         if (index === 0) {
             // Current week
