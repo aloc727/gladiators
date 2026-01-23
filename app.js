@@ -12,7 +12,7 @@ let nextRefreshTime = null; // Track when the next refresh is scheduled
 
 let latestData = null;
 let currentTab = 'table';
-let currentRange = 'recent';
+let currentRange = '4weeks';
 let currentMembersOnly = true;
 let userSort = null;
 
@@ -21,11 +21,10 @@ const WAR_REQUIREMENT = 1600;
 const WARNING_THRESHOLD = 800;
 const RECENT_JOIN_DAYS = 7;
 const MAX_WEEKS_DISPLAY = 260; // 5 years
-const RECENT_WEEKS_DISPLAY = 8; // ~2 months
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.10.0';
+const UI_VERSION = 'v1.13.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -826,7 +825,38 @@ function getVisibleColumns(columns) {
     if (currentRange === 'all') {
         return columns;
     }
-    return columns.slice(0, RECENT_WEEKS_DISPLAY);
+    
+    const now = new Date();
+    let cutoffDate = null;
+    
+    switch (currentRange) {
+        case '4weeks':
+            cutoffDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000);
+            break;
+        case '8weeks':
+            cutoffDate = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
+            break;
+        case '12weeks':
+            cutoffDate = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+            break;
+        case 'year':
+            cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            break;
+        default:
+            // Default to 4 weeks if unknown range
+            cutoffDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000);
+    }
+    
+    if (cutoffDate) {
+        return columns.filter(column => {
+            // Always include current week (first column)
+            if (column === columns[0]) return true;
+            // Include columns within the date range
+            return column.endDate && column.endDate >= cutoffDate;
+        });
+    }
+    
+    return columns;
 }
 
 function renderView() {
