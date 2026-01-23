@@ -294,10 +294,13 @@ function getWarEndDate(war) {
     
     const date = new Date(dateString);
     
-    // Find the next Monday for the war end
+    // If endDate is already a Monday, use it as-is
+    // Otherwise find the next Monday for the war end
     const dayOfWeek = date.getDay();
-    const daysUntilMonday = (1 - dayOfWeek + 7) % 7;
-    date.setDate(date.getDate() + daysUntilMonday);
+    if (dayOfWeek !== 1) {
+        const daysUntilMonday = (1 - dayOfWeek + 7) % 7;
+        date.setDate(date.getDate() + daysUntilMonday);
+    }
 
     // Set to 4:30am CT for display
     date.setHours(4, 30, 0, 0);
