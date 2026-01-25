@@ -748,7 +748,7 @@ async function refreshServerCache() {
         // IMPORTANT: Put database wars FIRST, then API wars
         // This ensures we keep all historical data from database
         const combined = mergeWarLogs(warHistoryCache, items);
-        warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
+        warLogCache = combined; // Temporarily remove limit for debugging
         console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, ${items.length} from API, ${warHistoryCache.length} from DB)`);
     } catch (error) {
         warLogAvailable = false;
@@ -769,16 +769,16 @@ async function refreshServerCache() {
                 const combined = mergeWarLogs(warHistoryCache, currentEntries);
                 warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
                 console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, ${currentEntries.length} from riverrace, ${warHistoryCache.length} from DB, warlog disabled)`);
-            } catch (riverError) {
-                console.warn('⚠️  Cache refresh failed for river race.');
-                // Fallback: just use what we have from database
-                warLogCache = warHistoryCache.slice(0, HISTORY_MAX_WEEKS);
+                    } catch (riverError) {
+                        console.warn('⚠️  Cache refresh failed for river race.');
+                        // Fallback: just use what we have from database
+                        warLogCache = warHistoryCache; // Temporarily remove limit for debugging
                 console.log(`📊 Using database-only cache: ${warLogCache.length} wars`);
             }
-        } else {
-            console.warn('⚠️  Cache refresh failed for war log.');
-            // Fallback: use database cache
-            warLogCache = warHistoryCache.slice(0, HISTORY_MAX_WEEKS);
+                } else {
+                    console.warn('⚠️  Cache refresh failed for war log.');
+                    // Fallback: use database cache
+                    warLogCache = warHistoryCache; // Temporarily remove limit for debugging
             console.log(`📊 Using database-only cache after error: ${warLogCache.length} wars`);
         }
     }
