@@ -373,14 +373,6 @@ function processWarData(members, warLog) {
     const sortedWars = [...warLog]
         .map(war => {
             const endDateObj = getWarEndDate(war);
-            console.log('War entry:', {
-                id: war.id,
-                endDate: war.endDate,
-                endDateObj: endDateObj.toISOString(),
-                participants: war.participants?.length || 0,
-                seasonId: war.seasonId,
-                periodIndex: war.periodIndex
-            });
             return {
                 ...war,
                 endDateObj: endDateObj
@@ -388,6 +380,16 @@ function processWarData(members, warLog) {
         })
         .sort((a, b) => b.endDateObj - a.endDateObj)
         .slice(0, MAX_WEEKS_DISPLAY);
+    
+    // Debug: Show sample of wars to see if they have different dates
+    console.log('Sample of first 5 wars:', sortedWars.slice(0, 5).map(w => ({
+        id: w.id,
+        endDate: w.endDate,
+        endDateObj: w.endDateObj.toISOString(),
+        participants: w.participants?.length || 0,
+        seasonId: w.seasonId,
+        periodIndex: w.periodIndex
+    })));
     
     console.log('Sorted wars:', sortedWars.length, 'after processing');
 
