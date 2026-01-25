@@ -910,6 +910,15 @@ const server = http.createServer((req, res) => {
     if (pathname === '/api/clan/warlog') {
         // Return historical wars only (exclude current week which updates every 5 min)
         const output = warLogCache.length ? warLogCache : getDemoWarLog();
+        console.log(`📤 Sending ${output.length} wars to frontend via /api/clan/warlog`);
+        if (output.length > 0 && output.length <= 5) {
+            console.log('📤 Sample of wars being sent:', output.slice(0, 3).map(w => ({
+                id: w.id,
+                endDate: w.endDate,
+                seasonId: w.seasonId,
+                participants: w.participants?.length || 0
+            })));
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ warLog: output }));
         return;
