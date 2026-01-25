@@ -11,10 +11,6 @@ async function insertTestWars() {
     try {
         console.log('🧪 Inserting test war data...');
         
-        // Get Tidal Owl and Mister member tags
-        const tidalOwl = await db.getMemberByTag('#TIDALOWL_TAG'); // We'll need to find the actual tag
-        const mister = await db.getMemberByTag('#MISTER_TAG'); // We'll need to find the actual tag
-        
         // First, let's find these members by name
         const allMembers = await db.getMembers(true);
         const tidalOwlMember = allMembers.find(m => m.name && (m.name.toLowerCase().includes('tidal') || m.name.toLowerCase().includes('owl')));
