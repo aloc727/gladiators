@@ -488,6 +488,15 @@ function processWarData(members, warLog) {
     });
 
     const dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
+    
+    console.log('Date merged wars:', dateMergedWars.length, 'unique wars after date merging');
+    console.log('Sample of merged wars:', dateMergedWars.slice(0, 5).map(w => ({
+        endDateObj: w.endDateObj.toISOString(),
+        participants: w.participants?.length || 0,
+        seasonId: w.seasonId,
+        periodIndex: w.periodIndex,
+        label: w.label
+    })));
 
     const columns = dateMergedWars.map((war, index) => {
         const seasonWeek = getSeasonWeekLabel(war);
