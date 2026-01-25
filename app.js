@@ -812,8 +812,12 @@ function processWarData(members, warLog) {
 
     const players = Array.from(playersMap.values());
 
+    // Return all players (including dynamically added former members from allPlayers)
+    // Use allPlayers if it has more entries (includes dynamically added ones)
+    const finalPlayers = allPlayers.length > players.length ? allPlayers : players;
+    
     return {
-        players,
+        players: finalPlayers,
         columns: filteredColumns
     };
 }
