@@ -166,8 +166,7 @@ async function upsertWarWeek(warWeek) {
                 period_index = COALESCE($3, period_index),
                 start_date = COALESCE($4, start_date),
                 created_date = COALESCE($5, created_date),
-                data_source = $6,
-                updated_at = CURRENT_TIMESTAMP
+                data_source = $6
             WHERE id = $7
             RETURNING *
         `;
