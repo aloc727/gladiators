@@ -913,19 +913,30 @@ const server = http.createServer((req, res) => {
             return;
         }
         
+        // Set a timeout for the response
+        const timeout = setTimeout(() => {
+            if (!res.headersSent) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ currentWar: null, error: 'API timeout' }));
+            }
+        }, 8000); // 8 second timeout
+        
         const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
         makeAPIRequest(riverRaceEndpoint, (err, riverData) => {
-            if (err) {
+            clearTimeout(timeout);
+            if (!res.headersSent) {
+                if (err) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ currentWar: null }));
+                    return;
+                }
+                
+                const currentEntries = convertRiverRaceToWarLog(riverData);
+                const enriched = currentEntries.map(entry => enrichWarEntry(entry, 'riverrace'));
+                
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ currentWar: null }));
-                return;
+                res.end(JSON.stringify({ currentWar: enriched[0] || null }));
             }
-            
-            const currentEntries = convertRiverRaceToWarLog(riverData);
-            const enriched = currentEntries.map(entry => enrichWarEntry(entry, 'riverrace'));
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ currentWar: enriched[0] || null }));
         });
         return;
     }
