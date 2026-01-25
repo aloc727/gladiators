@@ -580,6 +580,9 @@ function processWarData(members, warLog) {
         // Use startDate from war if available, otherwise calculate it
         const range = formatWarRange(war.endDateObj, war.startDate);
         
+        // TEMPORARY: Add war ID to label for debugging
+        const warIdLabel = war.id ? ` [ID:${war.id}]` : '';
+        
         if (index === 0) {
             // Current week
             const currentLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
