@@ -316,9 +316,10 @@ function getSeasonWeekLabel(war) {
 function getWarEndDate(war) {
     // Use the endDate from the database if available (it's already the correct Monday)
     if (war.endDate) {
+        // Parse the date - PostgreSQL returns it as a string in UTC or local format
         const date = new Date(war.endDate);
-        // Ensure it's set to 4:30am CT
-        date.setHours(4, 30, 0, 0);
+        // Don't modify the date - use it as-is from the database
+        // The database already has the correct end date
         return date;
     }
     
@@ -331,7 +332,9 @@ function getWarEndDate(war) {
             const daysUntilMonday = (1 - dayOfWeek + 7) % 7;
             date.setDate(date.getDate() + daysUntilMonday);
         }
-        date.setHours(4, 30, 0, 0);
+        // Set to 4:30am CT (UTC-6) - convert to UTC first
+        // 4:30 AM CT = 10:30 AM UTC
+        date.setUTCHours(10, 30, 0, 0);
         return date;
     }
     
@@ -341,7 +344,9 @@ function getWarEndDate(war) {
     const daysUntilMonday = (1 - currentDay + 7) % 7;
     const endMonday = new Date(now);
     endMonday.setDate(now.getDate() + daysUntilMonday);
-    endMonday.setHours(4, 30, 0, 0);
+    // Set to 4:30am CT (UTC-6) - convert to UTC first
+    // 4:30 AM CT = 10:30 AM UTC
+    endMonday.setUTCHours(10, 30, 0, 0);
     return endMonday;
 }
 
