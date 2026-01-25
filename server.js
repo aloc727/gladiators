@@ -29,7 +29,7 @@ const CLAN_TAG = '2CPPJLJ';
 const API_BASE_URL = 'api.clashroyale.com';
 
 // Database storage (PostgreSQL)
-const HISTORY_MAX_WEEKS = 260;
+const HISTORY_MAX_WEEKS = 1000; // Temporarily increased to include test wars for debugging
 const WARLOG_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily check
 
 // Fallback: Keep JSON file paths for migration/backup purposes
@@ -55,7 +55,7 @@ if (!API_KEY || !isValidApiKey(API_KEY)) {
 // Database helper functions (replacing JSON file operations)
 async function loadWarHistory() {
     try {
-        const warWeeks = await db.getWarWeeks(HISTORY_MAX_WEEKS);
+        const warWeeks = await db.getWarWeeks(null); // Load all wars for debugging
         console.log(`📊 Loaded ${warWeeks.length} war weeks from database`);
         
         // Log first 5 to see what we're getting

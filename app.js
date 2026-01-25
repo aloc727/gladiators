@@ -21,7 +21,7 @@ let userSort = null;
 const WAR_REQUIREMENT = 1600;
 const WARNING_THRESHOLD = 800;
 const RECENT_JOIN_DAYS = 7;
-const MAX_WEEKS_DISPLAY = 260; // 5 years
+const MAX_WEEKS_DISPLAY = 1000; // Temporarily increased for debugging
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
