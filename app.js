@@ -347,8 +347,9 @@ function getWarEndDate(war) {
             }
         }
         
-        // Don't modify the date - use it as-is from the database
-        // The database already has the correct end date
+        // CRITICAL: Don't normalize the date - use it exactly as stored in database
+        // The database has the correct end date, and we need to preserve uniqueness
+        // If we normalize all dates to the same Monday, all wars collapse into one column
         return date;
     }
     
@@ -409,6 +410,19 @@ function processWarData(members, warLog) {
     const sortedWars = [...warLog]
         .map(war => {
             const endDateObj = getWarEndDate(war);
+            // Debug: Log if we're normalizing dates incorrectly
+            if (war.endDate && endDateObj) {
+                const originalDate = new Date(war.endDate);
+                const normalizedDate = endDateObj;
+                if (Math.abs(originalDate.getTime() - normalizedDate.getTime()) > 24 * 60 * 60 * 1000) {
+                    console.warn('⚠️  Date normalization detected:', {
+                        warId: war.id,
+                        originalEndDate: war.endDate,
+                        normalizedEndDate: normalizedDate.toISOString(),
+                        diffHours: (normalizedDate.getTime() - originalDate.getTime()) / (1000 * 60 * 60)
+                    });
+                }
+            }
             return {
                 ...war,
                 endDateObj: endDateObj
