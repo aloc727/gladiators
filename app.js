@@ -545,7 +545,8 @@ function processWarData(members, warLog) {
     const mergedWars = Array.from(mergedWarsMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
 
     const dateMergedMap = new Map();
-    mergedWars.forEach(war => {
+    console.log(`📊 Starting dateMergedMap with ${mergedWars.length} merged wars`);
+    mergedWars.forEach((war, index) => {
         if (!war.endDateObj) {
             console.warn('War missing endDateObj:', war.id, war.endDate, war.createdDate);
             return;
@@ -559,13 +560,11 @@ function processWarData(members, warLog) {
                 ? `${dateKey}-s${war.seasonId}-p${war.periodIndex}` 
                 : `${dateKey}-${Math.random().toString(36).substring(7)}`); // Fallback to random if no ID/season info
         
-        // Debug: Log first few unique keys to see what we're creating
-        if (dateMergedMap.size < 5) {
-            console.log(`🔑 Creating uniqueKey: ${uniqueKey} for war ID: ${war.id}, endDate: ${war.endDateObj.toISOString()}, dateKey: ${dateKey}`);
-        }
+        // Debug: Log all unique keys to see what we're creating
+        console.log(`🔑 [${index + 1}/${mergedWars.length}] Creating uniqueKey: ${uniqueKey} for war ID: ${war.id || 'NO ID'}, endDate: ${war.endDateObj.toISOString()}, dateKey: ${dateKey}, seasonId: ${war.seasonId || 'null'}, periodIndex: ${war.periodIndex ?? 'null'}`);
         
         if (dateMergedMap.has(uniqueKey)) {
-            console.warn(`⚠️  Duplicate uniqueKey detected: ${uniqueKey}. Merging participants.`);
+            console.warn(`⚠️  Duplicate uniqueKey detected: ${uniqueKey}. This should NOT happen if IDs are unique! Merging participants.`);
         }
         
         if (!dateMergedMap.has(uniqueKey)) {
@@ -602,14 +601,34 @@ function processWarData(members, warLog) {
 
     const dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
     
-    console.log('Date merged wars:', dateMergedWars.length, 'unique wars after date merging');
-    console.log('Sample of merged wars:', dateMergedWars.slice(0, 5).map(w => ({
+    console.log('Date merged wars:', dateMergedWars.length, 'unique wars after date merging (expected:', mergedWars.length, 'if no duplicates)');
+    console.log('All merged wars with details:', dateMergedWars.map(w => ({
+        id: w.id,
+        uniqueKey: w.uniqueKey,
         endDateObj: w.endDateObj.toISOString(),
+        endDate: w.endDate,
+        startDate: w.startDate,
         participants: w.participants?.length || 0,
         seasonId: w.seasonId,
         periodIndex: w.periodIndex,
         label: w.label
     })));
+    
+    // Debug: Check if we lost wars during merging
+    if (dateMergedWars.length < mergedWars.length) {
+        console.warn(`⚠️  WARNING: Lost ${mergedWars.length - dateMergedWars.length} wars during date merging!`);
+        const mergedIds = new Set(dateMergedWars.map(w => w.id));
+        const lostWars = mergedWars.filter(w => w.id && !mergedIds.has(w.id));
+        if (lostWars.length > 0) {
+            console.warn('Lost wars:', lostWars.map(w => ({
+                id: w.id,
+                endDate: w.endDate,
+                endDateObj: w.endDateObj?.toISOString(),
+                seasonId: w.seasonId,
+                periodIndex: w.periodIndex
+            })));
+        }
+    }
 
     const columns = dateMergedWars.map((war, index) => {
         const seasonWeek = getSeasonWeekLabel(war);
