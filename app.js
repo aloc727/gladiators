@@ -944,6 +944,11 @@ function getVisibleColumns(columns) {
         return columns;
     }
     
+    if (!columns || columns.length === 0) {
+        console.warn('getVisibleColumns: No columns provided');
+        return [];
+    }
+    
     const now = new Date();
     const currentWeekEndDate = columns[0]?.endDate; // The most recent war week's end date
 
@@ -972,12 +977,26 @@ function getVisibleColumns(columns) {
             break;
     }
     
+    // Debug logging
+    console.log('getVisibleColumns:', {
+        currentRange,
+        totalColumns: columns.length,
+        cutoffDate: cutoffDate.toISOString(),
+        now: now.toISOString(),
+        columnDates: columns.slice(0, 5).map(c => ({
+            label: c.label,
+            endDate: c.endDate instanceof Date ? c.endDate.toISOString() : c.endDate,
+            endDateType: typeof c.endDate
+        }))
+    });
+    
     if (cutoffDate) {
         // Filter other columns based on cutoffDate, ensuring current week is not re-added
         for (let i = 1; i < columns.length; i++) {
             const columnEndDate = columns[i].endDate;
             if (!columnEndDate) {
                 // Skip columns without endDate
+                console.warn(`Column ${i} (${columns[i].label}) has no endDate`);
                 continue;
             }
             
@@ -985,10 +1004,14 @@ function getVisibleColumns(columns) {
             const columnDate = columnEndDate instanceof Date ? columnEndDate : new Date(columnEndDate);
             if (isNaN(columnDate.getTime())) {
                 // Invalid date, skip
+                console.warn(`Column ${i} (${columns[i].label}) has invalid date:`, columnEndDate);
                 continue;
             }
             
-            if (columnDate >= cutoffDate) {
+            const isInRange = columnDate >= cutoffDate;
+            console.log(`Column ${i} (${columns[i].label}): ${columnDate.toISOString()} >= ${cutoffDate.toISOString()} = ${isInRange}`);
+            
+            if (isInRange) {
                 visible.push(columns[i]);
             } else {
                 // Since columns are sorted by date, we can stop once we hit an older one
@@ -996,6 +1019,12 @@ function getVisibleColumns(columns) {
             }
         }
     }
+    
+    console.log('getVisibleColumns result:', {
+        visibleCount: visible.length,
+        visibleLabels: visible.map(c => c.label)
+    });
+    
     return visible;
 }
 
