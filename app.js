@@ -586,12 +586,12 @@ function processWarData(members, warLog) {
         if (index === 0) {
             // Current week
             const currentLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
-            return { label: currentLabel, endDate: war.endDateObj, baseLabel: currentLabel, war: war };
+            return { label: currentLabel + warIdLabel, endDate: war.endDateObj, baseLabel: currentLabel, war: war };
         }
         
         // Historical weeks - always show season/week and date range
         const historicalLabel = seasonWeek ? `${seasonWeek} (${range})` : range;
-        return { label: historicalLabel, endDate: war.endDateObj, baseLabel: historicalLabel, war: war };
+        return { label: historicalLabel + warIdLabel, endDate: war.endDateObj, baseLabel: historicalLabel, war: war };
     });
 
     const labelRangeRegex = /(\d{1,2}\/\d{1,2}\/\d{4})/g;
