@@ -752,9 +752,11 @@ async function refreshServerCache() {
                 for (const entry of currentEntries) {
                     warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
                 }
-                const combined = mergeWarLogs(currentEntries, warHistoryCache);
+                // IMPORTANT: Put database wars FIRST, then current week
+                // This ensures we keep all historical data from database
+                const combined = mergeWarLogs(warHistoryCache, currentEntries);
                 warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
-                console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, warlog disabled)`);
+                console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, ${currentEntries.length} from riverrace, ${warHistoryCache.length} from DB, warlog disabled)`);
             } catch (riverError) {
                 console.warn('⚠️  Cache refresh failed for river race.');
                 // Fallback: just use what we have from database
