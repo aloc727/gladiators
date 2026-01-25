@@ -315,34 +315,35 @@ function getSeasonWeekLabel(war) {
 
 // Get the Monday date for a war (wars end Monday at 4:30am CT)
 function getWarEndDate(war) {
-    // Try different possible date fields from the API
-    const dateString = war.endDate || war.createdDate || war.seasonId || null;
-    
-    if (!dateString) {
-        // Fallback: calculate based on current date
-        const now = new Date();
-        const currentDay = now.getDay();
-        const daysUntilMonday = (1 - currentDay + 7) % 7;
-        const endMonday = new Date(now);
-        endMonday.setDate(now.getDate() + daysUntilMonday);
-        endMonday.setHours(4, 30, 0, 0);
-        return endMonday;
+    // Use the endDate from the database if available (it's already the correct Monday)
+    if (war.endDate) {
+        const date = new Date(war.endDate);
+        // Ensure it's set to 4:30am CT
+        date.setHours(4, 30, 0, 0);
+        return date;
     }
     
-    const date = new Date(dateString);
-    
-    // If endDate is already a Monday, use it as-is
-    // Otherwise find the next Monday for the war end
-    const dayOfWeek = date.getDay();
-    if (dayOfWeek !== 1) {
-        const daysUntilMonday = (1 - dayOfWeek + 7) % 7;
-        date.setDate(date.getDate() + daysUntilMonday);
+    // Fallback to createdDate if endDate not available
+    if (war.createdDate) {
+        const date = new Date(war.createdDate);
+        // If it's not already a Monday, find the Monday for that week
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek !== 1) {
+            const daysUntilMonday = (1 - dayOfWeek + 7) % 7;
+            date.setDate(date.getDate() + daysUntilMonday);
+        }
+        date.setHours(4, 30, 0, 0);
+        return date;
     }
-
-    // Set to 4:30am CT for display
-    date.setHours(4, 30, 0, 0);
     
-    return date;
+    // Last resort: calculate based on current date
+    const now = new Date();
+    const currentDay = now.getDay();
+    const daysUntilMonday = (1 - currentDay + 7) % 7;
+    const endMonday = new Date(now);
+    endMonday.setDate(now.getDate() + daysUntilMonday);
+    endMonday.setHours(4, 30, 0, 0);
+    return endMonday;
 }
 
 function processWarData(members, warLog) {
