@@ -512,12 +512,16 @@ function processWarData(members, warLog) {
             console.warn('War missing endDateObj:', war.id, war.endDate, war.createdDate);
             return;
         }
+        // Use a unique key that includes ID to prevent different wars from collapsing
+        // Only merge wars that are truly duplicates (same id or same date+season+period)
         const dateKey = formatWarDate(war.endDateObj.toISOString());
-        if (!dateMergedMap.has(dateKey)) {
-            dateMergedMap.set(dateKey, { ...war, dateKey });
+        const uniqueKey = war.id ? `${dateKey}-id${war.id}` : `${dateKey}-${war.seasonId || 'null'}-${war.periodIndex || 'null'}`;
+        
+        if (!dateMergedMap.has(uniqueKey)) {
+            dateMergedMap.set(uniqueKey, { ...war, dateKey, uniqueKey });
             return;
         }
-        const existing = dateMergedMap.get(dateKey);
+        const existing = dateMergedMap.get(uniqueKey);
         const existingLabel = existing.label || '';
         const nextLabel = war.label || '';
         const preferredLabel = nextLabel.includes('Season') || nextLabel.length > existingLabel.length ? nextLabel : existingLabel;
