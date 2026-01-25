@@ -186,8 +186,14 @@ async function loadData() {
         // Fetch clan members
         const members = await fetchClanMembers(currentMembersOnly);
         
-        // Fetch war log
-        const warLog = await fetchWarLog();
+        // Fetch war log (historical) and current war separately
+        const [historicalWars, currentWar] = await Promise.all([
+            fetchWarLog(),
+            fetch(`${API_BASE_URL}/api/clan/current-war`).then(r => r.json()).then(d => d.currentWar).catch(() => null)
+        ]);
+        
+        // Combine: current war first (if available), then historical
+        const warLog = currentWar ? [currentWar, ...historicalWars] : historicalWars;
         
         // Process data
         const processedData = processWarData(members, warLog);
