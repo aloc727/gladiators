@@ -740,12 +740,20 @@ function setSecurityHeaders(res) {
     res.removeHeader('X-Powered-By');
 }
 
-// Periodically capture current river race data to build history locally
-const HISTORY_CAPTURE_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-
+// Capture current week data ONCE when war ends (Monday 4:30am CT)
+// This prevents repetitive hourly captures of the same data
 async function captureCurrentWeek() {
     if (!API_KEY || !isValidApiKey(API_KEY)) {
         return;
+    }
+
+    // Only capture once per war week - check if we already have this week's data
+    const weekKey = getCurrentWarEndKey();
+    const existingWeek = await db.getWarWeekByEndDate(weekKey);
+    
+    // If we already have this week's final data, skip
+    if (existingWeek && existingWeek.dataSource === 'warlog') {
+        return; // Already have official data from warlog
     }
 
     const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
@@ -755,9 +763,18 @@ async function captureCurrentWeek() {
             return;
         }
 
+        // Only capture if this is a new war week or data has changed significantly
         const currentEntries = convertRiverRaceToWarLog(riverData);
         for (const entry of currentEntries) {
-            warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
+            // Check if we already have this exact war week
+            const entryEndDate = entry.endDate || entry.createdDate;
+            if (entryEndDate) {
+                const existing = await db.getWarWeekByEndDate(entryEndDate);
+                // Only upsert if we don't have it, or if it's from riverrace and we want to update it
+                if (!existing || existing.dataSource === 'riverrace') {
+                    warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
+                }
+            }
         }
     });
 }
@@ -925,9 +942,18 @@ server.listen(PORT, async () => {
     refreshServerCache();
     scheduleCacheRefresh();
 
-    // Start background capture to build local history
-    captureCurrentWeek();
-    setInterval(captureCurrentWeek, HISTORY_CAPTURE_INTERVAL_MS);
+    // Capture current week data only when war ends (Monday 4:30am CT)
+    // Check once per hour, but only capture if it's a new war week
+    // This prevents repetitive hourly captures
+    const checkAndCaptureCurrentWeek = () => {
+        const { day, hour, minute } = getCentralTimeParts();
+        // Only capture around war end time (Monday 4:25-4:35am CT) to get final data
+        if (day === 1 && hour === 4 && minute >= 25 && minute <= 35) {
+            captureCurrentWeek();
+        }
+    };
+    checkAndCaptureCurrentWeek();
+    setInterval(checkAndCaptureCurrentWeek, 60 * 60 * 1000); // Check every hour
 
     // Check once per day if war log endpoint is back
     checkWarLogAvailability();

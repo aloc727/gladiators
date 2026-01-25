@@ -153,28 +153,58 @@ async function getWarWeekByEndDate(endDate) {
 }
 
 async function upsertWarWeek(warWeek) {
-    const query = `
-        INSERT INTO war_weeks (season_id, section_index, period_index, start_date, end_date, created_date, data_source)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (season_id, section_index, period_index, end_date) DO UPDATE SET
-            start_date = EXCLUDED.start_date,
-            created_date = EXCLUDED.created_date,
-            data_source = EXCLUDED.data_source
-        RETURNING *
-    `;
+    // First try to find existing war week by end_date (more reliable than season_id which might be null)
+    const existing = await getWarWeekByEndDate(warWeek.endDate);
     
-    const values = [
-        warWeek.seasonId || null,
-        warWeek.sectionIndex || null,
-        warWeek.periodIndex || null,
-        warWeek.startDate,
-        warWeek.endDate,
-        warWeek.createdDate || null,
-        warWeek.dataSource || 'riverrace'
-    ];
-    
-    const result = await pool.query(query, values);
-    return result.rows[0];
+    if (existing) {
+        // Update existing record, preserving season info if it exists
+        const query = `
+            UPDATE war_weeks 
+            SET 
+                season_id = COALESCE($1, season_id),
+                section_index = COALESCE($2, section_index),
+                period_index = COALESCE($3, period_index),
+                start_date = COALESCE($4, start_date),
+                created_date = COALESCE($5, created_date),
+                data_source = $6,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $7
+            RETURNING *
+        `;
+        
+        const values = [
+            warWeek.seasonId || null,
+            warWeek.sectionIndex !== undefined ? warWeek.sectionIndex : null,
+            warWeek.periodIndex !== undefined ? warWeek.periodIndex : null,
+            warWeek.startDate || null,
+            warWeek.createdDate || null,
+            warWeek.dataSource || 'riverrace',
+            existing.id
+        ];
+        
+        const result = await pool.query(query, values);
+        return result.rows[0];
+    } else {
+        // Insert new record
+        const query = `
+            INSERT INTO war_weeks (season_id, section_index, period_index, start_date, end_date, created_date, data_source)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING *
+        `;
+        
+        const values = [
+            warWeek.seasonId || null,
+            warWeek.sectionIndex !== undefined ? warWeek.sectionIndex : null,
+            warWeek.periodIndex !== undefined ? warWeek.periodIndex : null,
+            warWeek.startDate,
+            warWeek.endDate,
+            warWeek.createdDate || null,
+            warWeek.dataSource || 'riverrace'
+        ];
+        
+        const result = await pool.query(query, values);
+        return result.rows[0];
+    }
 }
 
 /**
