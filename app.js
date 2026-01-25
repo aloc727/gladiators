@@ -385,6 +385,7 @@ function processWarData(members, warLog) {
     // Create a map of all players
     const playersMap = new Map();
     const playersByName = new Map();
+    const allPlayers = []; // Track all players including dynamically added ones
 
     // Initialize all players with empty scores
     members.forEach(member => {
@@ -399,6 +400,7 @@ function processWarData(members, warLog) {
         };
         playersMap.set(member.tag, player);
         playersByName.set(member.name.toLowerCase(), player);
+        allPlayers.push(player);
     });
 
     // Process war log - each item represents a war
@@ -671,17 +673,27 @@ function processWarData(members, warLog) {
                 player = playersByName.get(participant.name.toLowerCase()) || null;
             }
             if (!player) {
-                // Only warn if we're showing all members (not just current)
-                // Former members are expected to not be found when showing current only
-                if (!currentMembersOnly) {
-                    // Debug: log unmatched participants (only when showing all members)
-                    console.warn('No player found for participant (likely former member):', {
-                        tag: tag || 'no tag',
-                        name: participant.name || 'no name',
-                        warLabel: dateLabel
-                    });
+                // If showing all members, create a placeholder entry for this participant
+                // so their historical data can still be displayed
+                if (!currentMembersOnly && (tag || participant.name)) {
+                    player = {
+                        name: participant.name || tag || 'Unknown',
+                        tag: tag || '',
+                        role: participant.role || 'member',
+                        firstSeen: null,
+                        isCurrent: false, // Mark as former member
+                        scores: {},
+                        decksUsed: {}
+                    };
+                    // Add to maps so we can find it later
+                    if (tag) playersMap.set(tag, player);
+                    if (participant.name) playersByName.set(participant.name.toLowerCase(), player);
+                    // Add to allPlayers array so it gets included in the final players list
+                    allPlayers.push(player);
+                } else {
+                    // When showing current members only, skip unmatched participants
+                    return;
                 }
-                return;
             }
 
             // Get war points - handle null, undefined, and 0 differently
