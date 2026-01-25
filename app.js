@@ -954,7 +954,14 @@ function formatRole(role) {
 
 
 function getVisibleColumns(columns) {
+    console.log('getVisibleColumns called with:', {
+        currentRange,
+        columnsCount: columns?.length || 0,
+        columns: columns?.slice(0, 3).map(c => ({ label: c.label, endDate: c.endDate }))
+    });
+    
     if (currentRange === 'all') {
+        console.log('getVisibleColumns: Returning all columns (all time)');
         return columns;
     }
     
@@ -968,6 +975,12 @@ function getVisibleColumns(columns) {
 
     // Always include the current week
     const visible = currentWeekEndDate ? [columns[0]] : [];
+    
+    console.log('getVisibleColumns: Starting with current week:', {
+        hasCurrentWeek: visible.length > 0,
+        currentWeekLabel: columns[0]?.label,
+        currentWeekEndDate: currentWeekEndDate instanceof Date ? currentWeekEndDate.toISOString() : currentWeekEndDate
+    });
 
     let cutoffDate = null;
     switch (currentRange) {
