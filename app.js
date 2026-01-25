@@ -193,23 +193,22 @@ async function loadData() {
         const processedData = processWarData(members, warLog);
         
         // Debug: Log data summary
-        console.log('Data loaded:', {
-            members: members.length,
-            warLog: warLog.length,
-            processedPlayers: processedData.players.length,
-            processedColumns: processedData.columns.length,
-            columnDates: processedData.columns.map(c => ({
-                label: c.label,
-                endDate: c.endDate,
-                endDateType: typeof c.endDate,
-                endDateValue: c.endDate instanceof Date ? c.endDate.toISOString() : c.endDate
-            })),
-            samplePlayer: processedData.players[0] ? {
-                name: processedData.players[0].name,
-                scoresCount: Object.keys(processedData.players[0].scores).length,
-                sampleScores: Object.entries(processedData.players[0].scores).slice(0, 3)
-            } : null
-        });
+        console.log('=== DATA LOADED ===');
+        console.log('Members:', members.length);
+        console.log('War Log Entries:', warLog.length);
+        console.log('Processed Players:', processedData.players.length);
+        console.log('Processed Columns:', processedData.columns.length);
+        console.log('Current Range:', currentRange);
+        console.log('All Columns:', processedData.columns.map(c => ({
+            label: c.label,
+            endDate: c.endDate instanceof Date ? c.endDate.toISOString() : (c.endDate || 'NO DATE'),
+            hasEndDate: !!c.endDate
+        })));
+        console.log('Sample Player Scores:', processedData.players[0] ? {
+            name: processedData.players[0].name,
+            scoresCount: Object.keys(processedData.players[0].scores).length,
+            scoreKeys: Object.keys(processedData.players[0].scores).slice(0, 5)
+        } : null);
         
         // Store and render view
         latestData = processedData;
