@@ -409,14 +409,34 @@ async function upsertWarEntry(entry, history) {
 }
 
 function mergeWarLogs(primary, secondary) {
-    const combined = [...primary];
-    secondary.forEach(entry => {
-        const key = getWarEntryKey(entry);
-        if (!combined.find(item => getWarEntryKey(item) === key)) {
-            combined.push(entry);
+    // Use a Map keyed by a unique identifier to prevent duplicates
+    // Use id if available, otherwise use endDate + seasonId + periodIndex
+    const combinedMap = new Map();
+    
+    // Add all primary entries first
+    primary.forEach(entry => {
+        const key = entry.id ? `id:${entry.id}` : `${entry.endDate || entry.createdDate || 'unknown'}-${entry.seasonId || 'null'}-${entry.periodIndex || 'null'}`;
+        if (!combinedMap.has(key)) {
+            combinedMap.set(key, entry);
         }
     });
-    combined.sort((a, b) => new Date(b.endDate || b.createdDate) - new Date(a.endDate || a.createdDate));
+    
+    // Add secondary entries that don't already exist
+    secondary.forEach(entry => {
+        const key = entry.id ? `id:${entry.id}` : `${entry.endDate || entry.createdDate || 'unknown'}-${entry.seasonId || 'null'}-${entry.periodIndex || 'null'}`;
+        if (!combinedMap.has(key)) {
+            combinedMap.set(key, entry);
+        }
+    });
+    
+    const combined = Array.from(combinedMap.values());
+    combined.sort((a, b) => {
+        const dateA = new Date(a.endDate || a.createdDate || 0);
+        const dateB = new Date(b.endDate || b.createdDate || 0);
+        return dateB - dateA;
+    });
+    
+    console.log(`🔀 mergeWarLogs: ${primary.length} primary + ${secondary.length} secondary = ${combined.length} total`);
     return combined;
 }
 
