@@ -602,8 +602,11 @@ function processWarData(members, warLog) {
         // Use startDate from war if available, otherwise calculate it
         const range = formatWarRange(war.endDateObj, war.startDate);
         
-        // TEMPORARY: Add war ID to label for debugging
-        const warIdLabel = war.id ? ` [ID:${war.id}]` : '';
+        // TEMPORARY: Add war ID and season info to label for debugging
+        const seasonInfo = war.seasonId ? ` S${war.seasonId}` : '';
+        const periodInfo = war.periodIndex !== null && war.periodIndex !== undefined ? `W${war.periodIndex}` : '';
+        const seasonPeriodLabel = seasonInfo && periodInfo ? `${seasonInfo}${periodInfo}` : seasonInfo || '';
+        const warIdLabel = war.id ? ` [ID:${war.id}${seasonPeriodLabel ? `, ${seasonPeriodLabel}` : ''}]` : (seasonPeriodLabel ? ` [${seasonPeriodLabel}]` : '');
         
         if (index === 0) {
             // Current week
