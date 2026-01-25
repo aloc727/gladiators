@@ -697,8 +697,9 @@ async function refreshServerCache() {
     }
 
     try {
-        // Load existing war history from database
+        // Load existing war history from database FIRST
         warHistoryCache = await loadWarHistory();
+        console.log(`📊 Loaded ${warHistoryCache.length} wars from database into cache`);
         
         const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
         const data = await makeAPIRequestPromise(warlogEndpoint);
@@ -709,12 +710,14 @@ async function refreshServerCache() {
         warLogAvailable = true;
         const combined = mergeWarLogs(items, warHistoryCache);
         warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
+        console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total)`);
     } catch (error) {
         warLogAvailable = false;
         if (error.message.includes('disabled') || error.message.includes('notFound')) {
             try {
                 // Load existing war history from database
                 warHistoryCache = await loadWarHistory();
+                console.log(`📊 Loaded ${warHistoryCache.length} wars from database (warlog API disabled)`);
                 
                 const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
                 const riverData = await makeAPIRequestPromise(riverRaceEndpoint);
@@ -724,11 +727,18 @@ async function refreshServerCache() {
                 }
                 const combined = mergeWarLogs(currentEntries, warHistoryCache);
                 warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
+                console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, warlog disabled)`);
             } catch (riverError) {
                 console.warn('⚠️  Cache refresh failed for river race.');
+                // Fallback: just use what we have from database
+                warLogCache = warHistoryCache.slice(0, HISTORY_MAX_WEEKS);
+                console.log(`📊 Using database-only cache: ${warLogCache.length} wars`);
             }
         } else {
             console.warn('⚠️  Cache refresh failed for war log.');
+            // Fallback: use database cache
+            warLogCache = warHistoryCache.slice(0, HISTORY_MAX_WEEKS);
+            console.log(`📊 Using database-only cache after error: ${warLogCache.length} wars`);
         }
     }
 
