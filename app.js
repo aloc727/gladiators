@@ -387,14 +387,21 @@ function processWarData(members, warLog) {
         .slice(0, MAX_WEEKS_DISPLAY);
     
     // Debug: Show sample of wars to see if they have different dates
-    console.log('Sample of first 5 wars:', sortedWars.slice(0, 5).map(w => ({
-        id: w.id,
-        endDate: w.endDate,
-        endDateObj: w.endDateObj.toISOString(),
-        participants: w.participants?.length || 0,
-        seasonId: w.seasonId,
-        periodIndex: w.periodIndex
-    })));
+    console.log('Sample of first 5 wars:', sortedWars.slice(0, 5).map(w => {
+        const endDateStr = w.endDate ? (typeof w.endDate === 'string' ? w.endDate : w.endDate.toISOString()) : 'NO END DATE';
+        const endDateObjStr = w.endDateObj ? w.endDateObj.toISOString() : 'NO END DATE OBJ';
+        const dateKey = w.endDateObj ? formatWarDate(w.endDateObj.toISOString()) : 'NO DATE KEY';
+        return {
+            id: w.id,
+            endDate: endDateStr,
+            endDateObj: endDateObjStr,
+            dateKey: dateKey,
+            participants: w.participants?.length || 0,
+            seasonId: w.seasonId,
+            sectionIndex: w.sectionIndex,
+            periodIndex: w.periodIndex
+        };
+    }));
     
     console.log('Sorted wars:', sortedWars.length, 'after processing');
 
@@ -459,6 +466,10 @@ function processWarData(members, warLog) {
 
     const dateMergedMap = new Map();
     mergedWars.forEach(war => {
+        if (!war.endDateObj) {
+            console.warn('War missing endDateObj:', war.id, war.endDate, war.createdDate);
+            return;
+        }
         const dateKey = formatWarDate(war.endDateObj.toISOString());
         if (!dateMergedMap.has(dateKey)) {
             dateMergedMap.set(dateKey, { ...war, dateKey });
