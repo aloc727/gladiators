@@ -450,14 +450,28 @@ function processWarData(members, warLog) {
 
     const mergedWars = Array.from(mergedWarsMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
 
+    // Use a more precise date key that includes time to avoid merging wars with same date
+    // But also handle the case where multiple wars legitimately have the same end date
     const dateMergedMap = new Map();
     mergedWars.forEach(war => {
+        // Create a unique key using endDate + seasonId + periodIndex to avoid false merges
         const dateKey = formatWarDate(war.endDateObj.toISOString());
-        if (!dateMergedMap.has(dateKey)) {
-            dateMergedMap.set(dateKey, { ...war, dateKey });
+        const uniqueKey = `${dateKey}_${war.seasonId || 'null'}_${war.periodIndex || 'null'}_${war.id || 'null'}`;
+        
+        console.log('Merging war:', {
+            dateKey,
+            uniqueKey,
+            endDateObj: war.endDateObj.toISOString(),
+            seasonId: war.seasonId,
+            periodIndex: war.periodIndex,
+            id: war.id
+        });
+        
+        if (!dateMergedMap.has(uniqueKey)) {
+            dateMergedMap.set(uniqueKey, { ...war, dateKey, uniqueKey });
             return;
         }
-        const existing = dateMergedMap.get(dateKey);
+        const existing = dateMergedMap.get(uniqueKey);
         const existingLabel = existing.label || '';
         const nextLabel = war.label || '';
         const preferredLabel = nextLabel.includes('Season') || nextLabel.length > existingLabel.length ? nextLabel : existingLabel;
@@ -484,6 +498,8 @@ function processWarData(members, warLog) {
         existing.participants = Array.from(byKey.values());
         existing.label = preferredLabel || existing.label;
     });
+    
+    console.log('Date merged wars:', dateMergedMap.size, 'unique wars after merging');
 
     const dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
 
