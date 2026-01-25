@@ -740,20 +740,11 @@ function setSecurityHeaders(res) {
     res.removeHeader('X-Powered-By');
 }
 
-// Capture current week data ONCE when war ends (Monday 4:30am CT)
-// This prevents repetitive hourly captures of the same data
+// Capture current week data every 5 minutes and OVERWRITE the existing entry
+// This keeps the current week data fresh throughout the war
 async function captureCurrentWeek() {
     if (!API_KEY || !isValidApiKey(API_KEY)) {
         return;
-    }
-
-    // Only capture once per war week - check if we already have this week's data
-    const weekKey = getCurrentWarEndKey();
-    const existingWeek = await db.getWarWeekByEndDate(weekKey);
-    
-    // If we already have this week's final data, skip
-    if (existingWeek && existingWeek.dataSource === 'warlog') {
-        return; // Already have official data from warlog
     }
 
     const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
@@ -763,18 +754,11 @@ async function captureCurrentWeek() {
             return;
         }
 
-        // Only capture if this is a new war week or data has changed significantly
+        // Convert to war log format and upsert (will overwrite existing current week entry)
         const currentEntries = convertRiverRaceToWarLog(riverData);
         for (const entry of currentEntries) {
-            // Check if we already have this exact war week
-            const entryEndDate = entry.endDate || entry.createdDate;
-            if (entryEndDate) {
-                const existing = await db.getWarWeekByEndDate(entryEndDate);
-                // Only upsert if we don't have it, or if it's from riverrace and we want to update it
-                if (!existing || existing.dataSource === 'riverrace') {
-                    warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
-                }
-            }
+            // Upsert will update existing entry if it exists (same end_date)
+            warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
         }
     });
 }
@@ -785,6 +769,7 @@ async function captureWarSnapshotsWindow() {
     }
 
     const { day, hour, minute } = getCentralTimeParts();
+    // Only capture during war end window: Monday 4:25-4:31am CT
     if (day !== 1 || hour !== 4 || minute < 25 || minute > 31) {
         return;
     }
@@ -797,6 +782,13 @@ async function captureWarSnapshotsWindow() {
         }
 
         const participants = normalizeParticipants(riverData.clan.participants);
+        const totalFame = participants.reduce((sum, p) => sum + (p.warPoints || 0), 0);
+        
+        // Only save snapshot if values haven't reset to 0 (war hasn't ended yet)
+        if (totalFame === 0) {
+            return; // War has ended, don't save snapshot
+        }
+
         const weekKey = getCurrentWarEndKey();
         const timestamp = new Date().toISOString();
 
@@ -811,7 +803,6 @@ async function captureWarSnapshotsWindow() {
                 });
             }
 
-            const totalFame = participants.reduce((sum, p) => sum + (p.warPoints || 0), 0);
             const snapshotData = {
                 timestamp,
                 totalFame,
@@ -960,6 +951,7 @@ server.listen(PORT, async () => {
     setInterval(checkWarLogAvailability, WARLOG_CHECK_INTERVAL_MS);
 
     // Capture minute-by-minute snapshots around week rollover (Monday 4:25–4:31am CT)
+    // Only saves if values haven't reset to 0 (war hasn't ended yet)
     captureWarSnapshotsWindow();
-    setInterval(captureWarSnapshotsWindow, 60 * 1000);
+    setInterval(captureWarSnapshotsWindow, 60 * 1000); // Every 1 minute
 });
