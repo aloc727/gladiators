@@ -539,7 +539,20 @@ function processWarData(members, warLog) {
         // Use a unique key that includes ID to prevent different wars from collapsing
         // Only merge wars that are truly duplicates (same id or same date+season+period)
         const dateKey = formatWarDate(war.endDateObj.toISOString());
-        const uniqueKey = war.id ? `${dateKey}-id${war.id}` : `${dateKey}-${war.seasonId || 'null'}-${war.periodIndex || 'null'}`;
+        const uniqueKey = war.id 
+            ? `${dateKey}-id${war.id}` 
+            : (war.seasonId && war.periodIndex 
+                ? `${dateKey}-s${war.seasonId}-p${war.periodIndex}` 
+                : `${dateKey}-${Math.random().toString(36).substring(7)}`); // Fallback to random if no ID/season info
+        
+        // Debug: Log first few unique keys to see what we're creating
+        if (dateMergedMap.size < 5) {
+            console.log(`🔑 Creating uniqueKey: ${uniqueKey} for war ID: ${war.id}, endDate: ${war.endDateObj.toISOString()}, dateKey: ${dateKey}`);
+        }
+        
+        if (dateMergedMap.has(uniqueKey)) {
+            console.warn(`⚠️  Duplicate uniqueKey detected: ${uniqueKey}. Merging participants.`);
+        }
         
         if (!dateMergedMap.has(uniqueKey)) {
             dateMergedMap.set(uniqueKey, { ...war, dateKey, uniqueKey });
