@@ -671,12 +671,16 @@ function processWarData(members, warLog) {
                 player = playersByName.get(participant.name.toLowerCase()) || null;
             }
             if (!player) {
-                // Debug: log unmatched participants
-                console.warn('No player found for participant:', {
-                    tag: tag || 'no tag',
-                    name: participant.name || 'no name',
-                    warLabel: dateLabel
-                });
+                // Only warn if we're showing all members (not just current)
+                // Former members are expected to not be found when showing current only
+                if (!currentMembersOnly) {
+                    // Debug: log unmatched participants (only when showing all members)
+                    console.warn('No player found for participant (likely former member):', {
+                        tag: tag || 'no tag',
+                        name: participant.name || 'no name',
+                        warLabel: dateLabel
+                    });
+                }
                 return;
             }
 
