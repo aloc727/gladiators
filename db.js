@@ -119,6 +119,17 @@ async function getWarWeeks(limit = null) {
     const params = limit ? [limit] : [];
     const result = await pool.query(query, params);
     
+    // Log raw database values to diagnose date issues
+    if (result.rows.length > 0) {
+        console.log('📊 Raw DB dates (first 5):', result.rows.slice(0, 5).map(r => ({
+            id: r.id,
+            end_date_raw: r.end_date,
+            end_date_type: typeof r.end_date,
+            start_date_raw: r.start_date,
+            season_id: r.season_id
+        })));
+    }
+    
     return result.rows.map(row => ({
         id: row.id,
         seasonId: row.season_id,
