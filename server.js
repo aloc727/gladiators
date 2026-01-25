@@ -898,9 +898,35 @@ const server = http.createServer((req, res) => {
     }
     
     if (pathname === '/api/clan/warlog') {
+        // Return historical wars only (exclude current week which updates every 5 min)
         const output = warLogCache.length ? warLogCache : getDemoWarLog();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ warLog: output }));
+        return;
+    }
+    
+    if (pathname === '/api/clan/current-war') {
+        // Return current week from riverrace API (separate from historical)
+        if (!API_KEY || !isValidApiKey(API_KEY)) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ currentWar: null }));
+            return;
+        }
+        
+        const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
+        makeAPIRequest(riverRaceEndpoint, (err, riverData) => {
+            if (err) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ currentWar: null }));
+                return;
+            }
+            
+            const currentEntries = convertRiverRaceToWarLog(riverData);
+            const enriched = currentEntries.map(entry => enrichWarEntry(entry, 'riverrace'));
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ currentWar: enriched[0] || null }));
+        });
         return;
     }
     
