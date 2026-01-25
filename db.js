@@ -143,9 +143,24 @@ async function getWarWeeks(limit = null) {
 }
 
 async function getWarWeekByEndDate(endDate) {
+    // Convert endDate to proper format for comparison
+    // PostgreSQL TIMESTAMP comparison needs to handle timezone correctly
+    let dateValue = endDate;
+    if (endDate instanceof Date) {
+        dateValue = endDate.toISOString();
+    } else if (typeof endDate === 'string') {
+        // Ensure it's in ISO format
+        dateValue = new Date(endDate).toISOString();
+    }
+    
+    // Use date_trunc to compare dates at the day level (ignore time differences)
+    // This prevents timezone issues from causing mismatches
     const result = await pool.query(
-        'SELECT * FROM war_weeks WHERE end_date = $1',
-        [endDate]
+        `SELECT * FROM war_weeks 
+         WHERE DATE_TRUNC('day', end_date) = DATE_TRUNC('day', $1::timestamp)
+         ORDER BY end_date DESC
+         LIMIT 1`,
+        [dateValue]
     );
     
     if (result.rows.length === 0) return null;
@@ -164,8 +179,27 @@ async function getWarWeekByEndDate(endDate) {
 }
 
 async function upsertWarWeek(warWeek) {
-    // First try to find existing war week by end_date (more reliable than season_id which might be null)
-    const existing = await getWarWeekByEndDate(warWeek.endDate);
+    // First try to find existing war week by unique constraint (season_id, section_index, period_index, end_date)
+    // This is more reliable than just end_date which might match multiple weeks
+    let existing = null;
+    
+    if (warWeek.seasonId !== null && warWeek.sectionIndex !== null && warWeek.periodIndex !== null) {
+        // Try to find by unique constraint first
+        const result = await pool.query(
+            `SELECT * FROM war_weeks 
+             WHERE season_id = $1 AND section_index = $2 AND period_index = $3 AND end_date = $4
+             LIMIT 1`,
+            [warWeek.seasonId, warWeek.sectionIndex, warWeek.periodIndex, warWeek.endDate]
+        );
+        if (result.rows.length > 0) {
+            existing = result.rows[0];
+        }
+    }
+    
+    // Fallback to end_date match if unique constraint didn't work
+    if (!existing) {
+        existing = await getWarWeekByEndDate(warWeek.endDate);
+    }
     
     if (existing) {
         // Update existing record, preserving season info if it exists
