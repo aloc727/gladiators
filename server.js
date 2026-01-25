@@ -704,13 +704,20 @@ async function refreshServerCache() {
         const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
         const data = await makeAPIRequestPromise(warlogEndpoint);
         const items = (data.items || []).map(item => enrichWarEntry(item, 'warlog'));
+        console.log(`📊 Warlog API returned ${items.length} items`);
+        
+        // If warlog API returns data, merge it with database
+        // But prioritize database data since it has more history
         for (const entry of items) {
             warHistoryCache = await upsertWarEntry(entry, warHistoryCache);
         }
         warLogAvailable = true;
-        const combined = mergeWarLogs(items, warHistoryCache);
+        
+        // IMPORTANT: Put database wars FIRST, then API wars
+        // This ensures we keep all historical data from database
+        const combined = mergeWarLogs(warHistoryCache, items);
         warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
-        console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total)`);
+        console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, ${items.length} from API, ${warHistoryCache.length} from DB)`);
     } catch (error) {
         warLogAvailable = false;
         if (error.message.includes('disabled') || error.message.includes('notFound')) {
