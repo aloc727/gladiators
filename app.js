@@ -369,13 +369,27 @@ function processWarData(members, warLog) {
 
     // Process war log - each item represents a war
     // Sort by date (most recent first) and limit to MAX_WEEKS_DISPLAY
+    console.log('Processing war log:', warLog.length, 'entries');
     const sortedWars = [...warLog]
-        .map(war => ({
-            ...war,
-            endDateObj: getWarEndDate(war)
-        }))
+        .map(war => {
+            const endDateObj = getWarEndDate(war);
+            console.log('War entry:', {
+                id: war.id,
+                endDate: war.endDate,
+                endDateObj: endDateObj.toISOString(),
+                participants: war.participants?.length || 0,
+                seasonId: war.seasonId,
+                periodIndex: war.periodIndex
+            });
+            return {
+                ...war,
+                endDateObj: endDateObj
+            };
+        })
         .sort((a, b) => b.endDateObj - a.endDateObj)
         .slice(0, MAX_WEEKS_DISPLAY);
+    
+    console.log('Sorted wars:', sortedWars.length, 'after processing');
 
     // Show a notice if we only have current week data (war log endpoint disabled)
     if (sortedWars.length === 1) {
