@@ -428,9 +428,24 @@ function processWarData(members, warLog) {
             participants: w.participants?.length || 0,
             seasonId: w.seasonId,
             sectionIndex: w.sectionIndex,
-            periodIndex: w.periodIndex
+            periodIndex: w.periodIndex,
+            dataSource: w.dataSource
         };
     }));
+    
+    // Check for test wars specifically
+    const testWars = sortedWars.filter(w => w.dataSource === 'test_fake_data');
+    if (testWars.length > 0) {
+        console.log(`🧪 Found ${testWars.length} test wars in sorted list:`, testWars.map(w => ({
+            id: w.id,
+            endDate: w.endDate,
+            endDateObj: w.endDateObj ? w.endDateObj.toISOString() : 'NO OBJ',
+            seasonId: w.seasonId,
+            periodIndex: w.periodIndex
+        })));
+    } else {
+        console.log('⚠️  No test wars found in sorted list!');
+    }
     
     // Check for duplicate dateKeys
     const dateKeyCounts = new Map();

@@ -66,6 +66,18 @@ async function loadWarHistory() {
                 startDate: w.startDate,
                 seasonId: w.seasonId,
                 sectionIndex: w.sectionIndex,
+                periodIndex: w.periodIndex,
+                dataSource: w.dataSource
+            })));
+        }
+        
+        // Check for test wars specifically
+        const testWars = warWeeks.filter(w => w.dataSource === 'test_fake_data');
+        if (testWars.length > 0) {
+            console.log(`🧪 Found ${testWars.length} test wars:`, testWars.map(w => ({
+                id: w.id,
+                endDate: w.endDate,
+                seasonId: w.seasonId,
                 periodIndex: w.periodIndex
             })));
         }
