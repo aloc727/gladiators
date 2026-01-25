@@ -317,7 +317,17 @@ function getWarEndDate(war) {
     // Use the endDate from the database if available (it's already the correct Monday)
     if (war.endDate) {
         // Parse the date - PostgreSQL returns it as a string in UTC or local format
-        const date = new Date(war.endDate);
+        let date = new Date(war.endDate);
+        
+        // If the date is invalid, log it
+        if (isNaN(date.getTime())) {
+            console.warn('⚠️  Invalid date for war:', war.id, war.endDate);
+            // Fallback to createdDate
+            if (war.createdDate) {
+                date = new Date(war.createdDate);
+            }
+        }
+        
         // Don't modify the date - use it as-is from the database
         // The database already has the correct end date
         return date;

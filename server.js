@@ -56,10 +56,33 @@ if (!API_KEY || !isValidApiKey(API_KEY)) {
 async function loadWarHistory() {
     try {
         const warWeeks = await db.getWarWeeks(HISTORY_MAX_WEEKS);
+        console.log(`📊 Loaded ${warWeeks.length} war weeks from database`);
+        
+        // Log first 5 to see what we're getting
+        if (warWeeks.length > 0) {
+            console.log('Sample war weeks from DB:', warWeeks.slice(0, 5).map(w => ({
+                id: w.id,
+                endDate: w.endDate,
+                startDate: w.startDate,
+                seasonId: w.seasonId,
+                sectionIndex: w.sectionIndex,
+                periodIndex: w.periodIndex
+            })));
+        }
+        
         const warLog = [];
+        const seenIds = new Set();
         
         for (const week of warWeeks) {
+            // Skip duplicates
+            if (seenIds.has(week.id)) {
+                console.warn(`⚠️  Skipping duplicate war week id: ${week.id}`);
+                continue;
+            }
+            seenIds.add(week.id);
+            
             const participants = await db.getParticipantsByWarWeek(week.id);
+            
             // Get member names for participants
             const participantData = await Promise.all(participants.map(async (p) => {
                 const member = await db.getMemberByTag(p.memberTag);
@@ -78,22 +101,25 @@ async function loadWarHistory() {
                 };
             }));
             
+            // Preserve the date as-is from database (don't normalize)
             warLog.push({
                 id: week.id,
                 seasonId: week.seasonId,
                 sectionIndex: week.sectionIndex,
                 periodIndex: week.periodIndex,
                 startDate: week.startDate,
-                endDate: week.endDate,
+                endDate: week.endDate, // Use as-is from database
                 createdDate: week.createdDate,
                 dataSource: week.dataSource,
                 participants: participantData
             });
         }
         
+        console.log(`✅ Processed ${warLog.length} unique war weeks into war log`);
         return warLog;
     } catch (error) {
         console.warn('⚠️  Failed to load war history from database:', error.message);
+        console.error(error);
         return [];
     }
 }
