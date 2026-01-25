@@ -767,7 +767,7 @@ async function refreshServerCache() {
                 // IMPORTANT: Put database wars FIRST, then current week
                 // This ensures we keep all historical data from database
                 const combined = mergeWarLogs(warHistoryCache, currentEntries);
-                warLogCache = combined.slice(0, HISTORY_MAX_WEEKS);
+                warLogCache = combined; // Temporarily remove limit for debugging
                 console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, ${currentEntries.length} from riverrace, ${warHistoryCache.length} from DB, warlog disabled)`);
                     } catch (riverError) {
                         console.warn('⚠️  Cache refresh failed for river race.');
