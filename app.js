@@ -416,7 +416,7 @@ function processWarData(members, warLog) {
         .slice(0, MAX_WEEKS_DISPLAY);
     
     // Debug: Show sample of wars to see if they have different dates
-    console.log('Sample of first 5 wars:', sortedWars.slice(0, 5).map(w => {
+    console.log('Sample of first 10 wars:', sortedWars.slice(0, 10).map(w => {
         const endDateStr = w.endDate ? (typeof w.endDate === 'string' ? w.endDate : w.endDate.toISOString()) : 'NO END DATE';
         const endDateObjStr = w.endDateObj ? w.endDateObj.toISOString() : 'NO END DATE OBJ';
         const dateKey = w.endDateObj ? formatWarDate(w.endDateObj.toISOString()) : 'NO DATE KEY';
@@ -431,6 +431,19 @@ function processWarData(members, warLog) {
             periodIndex: w.periodIndex
         };
     }));
+    
+    // Check for duplicate dateKeys
+    const dateKeyCounts = new Map();
+    sortedWars.forEach(w => {
+        if (w.endDateObj) {
+            const key = formatWarDate(w.endDateObj.toISOString());
+            dateKeyCounts.set(key, (dateKeyCounts.get(key) || 0) + 1);
+        }
+    });
+    console.log('📊 Unique dateKeys:', dateKeyCounts.size, 'out of', sortedWars.length, 'wars');
+    if (dateKeyCounts.size < sortedWars.length) {
+        console.log('⚠️  Duplicate dateKeys found:', Array.from(dateKeyCounts.entries()).filter(([k, v]) => v > 1).slice(0, 5));
+    }
     
     console.log('Sorted wars:', sortedWars.length, 'after processing');
 
