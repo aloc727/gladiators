@@ -435,6 +435,13 @@ function processWarData(members, warLog) {
         };
     }));
     
+    // Debug: Check if all wars have the same endDateObj (this would cause collapsing)
+    const uniqueEndDates = new Set(sortedWars.map(w => w.endDateObj ? w.endDateObj.toISOString() : 'NO DATE'));
+    console.log(`📊 Unique endDateObj values: ${uniqueEndDates.size} out of ${sortedWars.length} wars`);
+    if (uniqueEndDates.size < 10) {
+        console.log('⚠️  Only a few unique end dates! First 10 unique dates:', Array.from(uniqueEndDates).slice(0, 10));
+    }
+    
     // Check for test wars specifically
     const testWars = sortedWars.filter(w => w.dataSource === 'test_fake_data');
     if (testWars.length > 0) {
