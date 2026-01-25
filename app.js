@@ -192,8 +192,11 @@ async function loadData() {
             fetch(`${API_BASE_URL}/api/clan/current-war`).then(r => r.json()).then(d => d.currentWar).catch(() => null)
         ]);
         
+        console.log(`📥 Frontend: ${historicalWars.length} historical wars, ${currentWar ? '1' : '0'} current war`);
+        
         // Combine: current war first (if available), then historical
         const warLog = currentWar ? [currentWar, ...historicalWars] : historicalWars;
+        console.log(`📥 Frontend: Combined ${warLog.length} total wars to process`);
         
         // Process data
         const processedData = processWarData(members, warLog);
@@ -267,7 +270,17 @@ async function fetchWarLog() {
     }
     
     const data = await response.json();
-    return data.warLog || [];
+    const warLog = data.warLog || [];
+    console.log(`📥 Frontend received ${warLog.length} wars from /api/clan/warlog`);
+    if (warLog.length > 0 && warLog.length <= 5) {
+        console.log('📥 Sample of received wars:', warLog.slice(0, 3).map(w => ({
+            id: w.id,
+            endDate: w.endDate,
+            seasonId: w.seasonId,
+            participants: w.participants?.length || 0
+        })));
+    }
+    return warLog;
 }
 
 // Format date for war end (Monday at 4:30am CT)
