@@ -166,11 +166,13 @@ async function loadSnapshots() {
         for (const week of warWeeks) {
             const weekSnapshots = await db.getSnapshotsByWarWeek(week.id);
             if (weekSnapshots.length > 0) {
-                // Convert to old format for compatibility
                 const samples = weekSnapshots.map(s => {
                     const data = typeof s.snapshotData === 'object' ? s.snapshotData : JSON.parse(s.snapshotData || '{}');
                     return {
+                        id: s.id,
+                        snapshotId: s.id,
                         timestamp: s.snapshotTime,
+                        capturedAtCentral: data.capturedAtCentral || null,
                         totalFame: data.totalFame || 0,
                         participants: data.participants || []
                     };
@@ -189,9 +191,11 @@ async function loadSnapshots() {
     }
 }
 
+const CENTRAL_TZ = 'America/Chicago';
+
 function getCentralTimeParts(date = new Date()) {
     const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/Chicago',
+        timeZone: CENTRAL_TZ,
         weekday: 'short',
         hour: '2-digit',
         minute: '2-digit',
@@ -205,14 +209,78 @@ function getCentralTimeParts(date = new Date()) {
     return { day: weekdayMap[weekday] ?? 0, hour, minute };
 }
 
+/** Date and time in Central Time for display and snapshot metadata (e.g. "2025-03-10 04:28:00 CT") */
+function getCentralTimestampString(date = new Date()) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: CENTRAL_TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    const parts = formatter.formatToParts(date);
+    const get = (t) => parts.find(p => p.type === t)?.value || '';
+    const y = get('year');
+    const m = get('month');
+    const d = get('day');
+    const h = get('hour');
+    const min = get('minute');
+    const s = get('second');
+    return `${y}-${m}-${d} ${h}:${min}:${s} CT`;
+}
+
+/** War ends Monday 4:30am Central. Returns ISO string for that moment so week key is correct in any server TZ. */
 function getCurrentWarEndKey() {
     const now = new Date();
-    const currentDay = now.getDay();
-    const daysUntilMonday = (1 - currentDay + 7) % 7;
-    const endMonday = new Date(now);
-    endMonday.setDate(now.getDate() + daysUntilMonday);
-    endMonday.setHours(4, 30, 0, 0);
-    return endMonday.toISOString();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: CENTRAL_TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+    const parts = formatter.formatToParts(now);
+    const get = (type) => parts.find(p => p.type === type)?.value || '';
+    const year = parseInt(get('year'), 10);
+    const month = parseInt(get('month'), 10);
+    const day = parseInt(get('day'), 10);
+    const weekday = get('weekday');
+    const hour = parseInt(get('hour'), 10);
+    const minute = parseInt(get('minute'), 10);
+    const weekdayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+    const dayOfWeek = weekdayMap[weekday] ?? 0;
+    // If Monday before 4:30am CT, war ending is today 4:30am CT; else next Monday 4:30am CT
+    let targetMonday = new Date(year, month - 1, day);
+    if (dayOfWeek === 1 && (hour < 4 || (hour === 4 && minute < 30))) {
+        // keep targetMonday as today
+    } else {
+        const daysToAdd = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
+        targetMonday.setDate(targetMonday.getDate() + daysToAdd);
+    }
+    const y = targetMonday.getFullYear();
+    const m = targetMonday.getMonth() + 1;
+    const mondayDay = targetMonday.getDate();
+    const utcOffset = getCentralOffsetMinutes(y, m, mondayDay);
+    const utcMinutes = 4 * 60 + 30 - utcOffset;
+    const utcHours = Math.floor(utcMinutes / 60);
+    const utcMins = utcMinutes % 60;
+    const utcDate = new Date(Date.UTC(y, m - 1, mondayDay, utcHours, utcMins, 0, 0));
+    return utcDate.toISOString();
+}
+
+/** Offset in minutes: Central is UTC+offset (e.g. -300 for CDT, -360 for CST). */
+function getCentralOffsetMinutes(year, month, day) {
+    const marchSecondSunday = 8 + (7 - new Date(year, 2, 8).getDay()) % 7;
+    const novFirstSunday = 1 + (7 - new Date(year, 10, 1).getDay()) % 7;
+    const isDST = (month > 3 || (month === 3 && day >= marchSecondSunday)) &&
+        (month < 11 || (month === 11 && day < novFirstSunday));
+    return isDST ? -300 : -360;
 }
 
 function normalizeParticipants(participants = []) {
@@ -550,35 +618,24 @@ function getDemoWarLog() {
     return weeks.reverse();
 }
 
-// Convert current river race data to war log format
+// Convert current river race data to war log format (uses Central Time for week boundaries)
 function convertRiverRaceToWarLog(riverRaceData) {
     if (!riverRaceData || !riverRaceData.clan || !riverRaceData.clan.participants) {
         return [];
     }
     
-    // Wars start Thursday 4:30am CT and end Monday 4:30am CT
-    // Calculate current week's Monday end date
-    const now = new Date();
-    const currentDay = now.getDay();
-    const daysUntilMonday = (1 - currentDay + 7) % 7;
-    const currentMonday = new Date(now);
-    currentMonday.setDate(now.getDate() + daysUntilMonday);
-    currentMonday.setHours(4, 30, 0, 0);
+    const endDateISO = getCurrentWarEndKey();
+    const endDate = new Date(endDateISO);
+    const startThursday = new Date(endDate);
+    startThursday.setUTCDate(endDate.getUTCDate() - 4);
     
-    // Calculate Thursday start date (4 days before Monday)
-    const startThursday = new Date(currentMonday);
-    startThursday.setDate(currentMonday.getDate() - 4);
-    startThursday.setHours(4, 30, 0, 0);
-    
-    // Convert participants to war log format (keep raw fields)
     const participants = riverRaceData.clan.participants;
     
-    // Return as a single war entry (current week)
     return [{
         participants: participants,
-        createdDate: currentMonday.toISOString(),
+        createdDate: endDateISO,
         startDate: startThursday.toISOString(),
-        endDate: currentMonday.toISOString(),
+        endDate: endDateISO,
         state: riverRaceData.state || 'unknown',
         seasonId: riverRaceData.seasonId,
         sectionIndex: riverRaceData.sectionIndex,
@@ -867,21 +924,24 @@ async function captureWarSnapshotsWindow() {
         }
 
         const weekKey = getCurrentWarEndKey();
-        const timestamp = new Date().toISOString();
+        const now = new Date();
+        const timestamp = now.toISOString();
+        const capturedAtCentral = getCentralTimestampString(now);
 
         try {
-            // Get or create war week for this snapshot
+            // Get or create war week for this snapshot (current war only)
             let warWeek = await db.getWarWeekByEndDate(weekKey);
             if (!warWeek) {
                 warWeek = await db.upsertWarWeek({
                     endDate: weekKey,
-                    startDate: weekKey, // Will be updated later
+                    startDate: weekKey,
                     dataSource: 'snapshot'
                 });
             }
 
             const snapshotData = {
                 timestamp,
+                capturedAtCentral,
                 totalFame,
                 participants,
                 rawData: riverData

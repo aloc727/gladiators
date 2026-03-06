@@ -244,3 +244,15 @@ The migration from JSON to PostgreSQL is **low risk** with proper safeguards in 
 ---
 
 **Bottom Line:** This is a **low-risk, high-reward** migration. The safeguards (backups, rollback plan, v1.12 branch) make it safe to proceed.
+
+---
+
+## Archive war history (no mix with current war)
+
+To move all existing war history into `_archive` tables so only **current war** data lives in the main tables (and you can load past history later from your own source):
+
+```bash
+node scripts/archive-war-history.js
+```
+
+This copies `war_weeks`, `war_participants`, and `war_snapshots` into `war_weeks_archive`, `war_participants_archive`, and `war_snapshots_archive`, then clears the main tables. Current war data comes only from the API from then on. Snapshots are taken from the **current river race** API, keyed by **Central Time** (Monday 4:30am CT), and each snapshot includes an **ID** and **date/timestamp in Central Time**.
