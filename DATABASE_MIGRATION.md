@@ -80,7 +80,7 @@ CREATE TABLE war_participants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     war_week_id INTEGER NOT NULL,            -- FK to war_weeks
     member_tag TEXT NOT NULL,                -- FK to members
-    rank INTEGER,                             -- War rank (1-50)
+    rank INTEGER,                             -- War rank (1-80)
     war_points INTEGER,                      -- Total points
     decks_used INTEGER,                      -- Number of decks used
     boat_attacks INTEGER,                    -- Boat attacks (if available)

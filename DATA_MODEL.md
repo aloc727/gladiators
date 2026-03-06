@@ -27,7 +27,7 @@
 │ id (PK)              SERIAL                                  │
 │ war_week_id (FK)     INTEGER → war_weeks.id                 │
 │ member_tag (FK)      TEXT → members.tag                     │
-│ rank                 INTEGER (1-50)                          │
+│ rank                 INTEGER (1-80)                          │
 │ war_points           INTEGER                                 │
 │ decks_used           INTEGER                                 │
 │ boat_attacks         INTEGER                                 │
@@ -96,12 +96,45 @@
 - **Purpose**: One row per player per war (many-to-many)
 - **Primary Key**: `id` (auto-increment)
 - **Foreign Keys**:
-  - `war_week_id` → `war_weeks.id`
+  - `war_week_id` → `war_weeks.id` (which war week this participation belongs to)
   - `member_tag` → `members.tag`
 - **Unique Constraint**: `(war_week_id, member_tag)` (one record per player per war)
 - **Key Fields**:
   - `rank`, `war_points`, `decks_used`: Core metrics
   - `raw_data`: Full API response (JSONB for querying)
+
+**Example rows:** `war_week_id` is the `id` of the row in `war_weeks` for that war. Get it by inserting/upserting the war week first, then use the returned `id` for all participants of that week.
+
+```text
+-- One war week (war_weeks)
+id | season_id | period_index | end_date              | data_source
+---+-----------+--------------+-----------------------+-------------
+ 1 |       128|             1| 2025-03-10T09:30:00.000Z| riverrace
+
+-- Two participants for that week (war_participants)
+id | war_week_id | member_tag   | rank | war_points | decks_used | ...
+---+-------------+--------------+------+------------+------------+----
+ 1 |           1 | #JPRY8GGJY  |    1 |       1250 |         16 | ...
+ 2 |           1 | #ABC123XYZ  |    2 |       1180 |         15 | ...
+```
+
+So for the war ending 2025-03-10, every participant row has `war_week_id = 1`. A different war week (e.g. ending 2025-03-17) would have its own `war_weeks.id` (e.g. 2), and that week’s participants would all have `war_week_id = 2`.
+
+**Which war_week_id for “Season 127 Week 1”, “Season 128 Week 2”, etc.?**  
+There is no fixed number: `war_week_id` is the **`id`** of the row in `war_weeks` for that season/week. Your app assigns that `id` when it inserts/upserts the war week (e.g. from the API). To see your actual ids for Season 127–129, run:
+
+```sql
+SELECT id AS war_week_id, season_id, period_index AS week, end_date
+FROM war_weeks
+WHERE season_id BETWEEN 127 AND 129
+ORDER BY season_id, period_index;
+```
+
+**Where to run it:** Run this in a **database client**, not in the project terminal.  
+- **DBeaver (or pgAdmin, TablePlus):** Connect to the `gladiators` database → right‑click the database → **SQL Editor** → **New SQL Script** → paste the query above → run (Ctrl/Cmd+Enter).  
+- **Terminal (psql):** Connect to the DB, then paste the SQL: `psql -U gladiators_user -d gladiators -h localhost` (use `DB_PASSWORD` from `.env` when prompted). If the DB is on a remote server, use that host or an SSH tunnel; see `DBEAVER_SETUP.md` or `POSTGRES_SETUP.md`.
+
+Use the `war_week_id` value from the row that matches the season and week you want (e.g. the row with `season_id = 127` and `period_index = 1` is Season 127 Week 1).
 
 ### 4. **war_snapshots** (Minute-by-Minute Rollover Data)
 - **Purpose**: Capture state around Monday 4:30 AM CT rollover
