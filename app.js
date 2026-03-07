@@ -25,7 +25,7 @@ const MAX_WEEKS_DISPLAY = 1000; // Temporarily increased for debugging
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.13.0';
+const UI_VERSION = 'v1.17.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
