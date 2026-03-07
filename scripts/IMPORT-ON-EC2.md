@@ -156,6 +156,37 @@ exit
 
 ---
 
+## Run v1.17 cleanup (keep only participants 1895–1902 + current week, fix Season 129 dates)
+
+**One-time.** Run after pulling v1.17. Keeps only `war_participants` with ids 1895–1902 and current week (Mar 5–9); fixes `war_weeks` to Season 129 Week 1/2/3.
+
+```bash
+cd ~/gladiators
+git pull origin main
+psql -U gladiators_user -d gladiators -h localhost -f scripts/cleanup-and-fix-dates-1.17.sql
+sudo systemctl restart gladiators
+```
+
+---
+
+## Run data updates (names, tag fixes, participation) on EC2
+
+After pulling the latest code, run the SQL updates on EC2:
+
+```bash
+cd ~/gladiators
+git pull origin main
+psql -U gladiators_user -d gladiators -h localhost -f scripts/data-updates.sql
+```
+
+Then restart the app so caches refresh:
+
+```bash
+sudo systemctl restart gladiators
+```
+
+---
+
 ## Quick reference
 
 | Step        | Where  | Command |
@@ -164,4 +195,6 @@ exit
 | Copy CSV   | Mac    | `scp -i /Users/alicelocatelli/Downloads/gladiators-key.pem ~/Downloads/2026.03.06\ -\ Gladiators\ Historic\ Data\ Upload.csv ubuntu@EC2_IP:~/gladiators/data/` |
 | Install deps | EC2  | `cd ~/gladiators && npm install` |
 | Run import | EC2    | `node scripts/import-spreadsheet-wars.js ~/gladiators/data/2026.03.06\ -\ Gladiators\ Historic\ Data\ Upload.csv` |
+| Data updates | EC2  | `cd ~/gladiators && psql -U gladiators_user -d gladiators -h localhost -f scripts/data-updates.sql` |
+| Restart app | EC2   | `sudo systemctl restart gladiators` |
 | Log out    | EC2    | `exit` |

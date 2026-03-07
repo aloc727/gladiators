@@ -25,7 +25,7 @@ const MAX_WEEKS_DISPLAY = 1000; // Temporarily increased for debugging
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.13.0';
+const UI_VERSION = 'v1.18.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -1159,105 +1159,32 @@ function formatRole(role) {
 }
 
 
+const RANGE_MS = {
+    last4weeks: 4 * 7 * 24 * 60 * 60 * 1000,
+    last8weeks: 8 * 7 * 24 * 60 * 60 * 1000,
+    last12weeks: 12 * 7 * 24 * 60 * 60 * 1000,
+    lastyear: 365 * 24 * 60 * 60 * 1000
+};
+
 function getVisibleColumns(columns) {
-    console.log('getVisibleColumns called with:', {
-        currentRange,
-        columnsCount: columns?.length || 0,
-        columns: columns?.slice(0, 3).map(c => ({ label: c.label, endDate: c.endDate }))
-    });
-    
-    if (currentRange === 'all') {
-        console.log('getVisibleColumns: Returning all columns (all time)');
-        return columns;
-    }
-    
-    if (!columns || columns.length === 0) {
-        console.warn('getVisibleColumns: No columns provided');
-        return [];
-    }
-    
+    if (currentRange === 'all') return columns ?? [];
+    if (!columns?.length) return [];
+
     const now = new Date();
-    const currentWeekEndDate = columns[0]?.endDate; // The most recent war week's end date
+    const visible = columns[0]?.endDate ? [columns[0]] : [];
+    const cutoffMs = RANGE_MS[currentRange] ?? RANGE_MS.last4weeks;
+    const cutoffDate = new Date(now.getTime() - cutoffMs);
 
-    // Always include the current week
-    const visible = currentWeekEndDate ? [columns[0]] : [];
-    
-    console.log('getVisibleColumns: Starting with current week:', {
-        hasCurrentWeek: visible.length > 0,
-        currentWeekLabel: columns[0]?.label,
-        currentWeekEndDate: currentWeekEndDate instanceof Date ? currentWeekEndDate.toISOString() : currentWeekEndDate
-    });
-
-    let cutoffDate = null;
-    switch (currentRange) {
-        case 'last4weeks':
-            cutoffDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000);
+    for (let i = 1; i < columns.length; i++) {
+        const col = columns[i];
+        const columnDate = col.endDate instanceof Date ? col.endDate : new Date(col.endDate);
+        if (!col.endDate || isNaN(columnDate.getTime())) continue;
+        if (columnDate >= cutoffDate) {
+            visible.push(col);
+        } else {
             break;
-        case 'last8weeks':
-            cutoffDate = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
-            break;
-        case 'last12weeks':
-            cutoffDate = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
-            break;
-        case 'lastyear':
-            cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-            break;
-        case 'all':
-            return columns; // Show all columns
-        default:
-            // Default to 4 weeks if unknown range
-            cutoffDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000);
-            break;
-    }
-    
-    // Debug logging
-    console.log('getVisibleColumns:', {
-        currentRange,
-        totalColumns: columns.length,
-        cutoffDate: cutoffDate.toISOString(),
-        now: now.toISOString(),
-        columnDates: columns.slice(0, 5).map(c => ({
-            label: c.label,
-            endDate: c.endDate instanceof Date ? c.endDate.toISOString() : c.endDate,
-            endDateType: typeof c.endDate
-        }))
-    });
-    
-    if (cutoffDate) {
-        // Filter other columns based on cutoffDate, ensuring current week is not re-added
-        for (let i = 1; i < columns.length; i++) {
-            const columnEndDate = columns[i].endDate;
-            if (!columnEndDate) {
-                // Skip columns without endDate
-                console.warn(`Column ${i} (${columns[i].label}) has no endDate`);
-                continue;
-            }
-            
-            // Ensure we're comparing Date objects
-            const columnDate = columnEndDate instanceof Date ? columnEndDate : new Date(columnEndDate);
-            if (isNaN(columnDate.getTime())) {
-                // Invalid date, skip
-                console.warn(`Column ${i} (${columns[i].label}) has invalid date:`, columnEndDate);
-                continue;
-            }
-            
-            const isInRange = columnDate >= cutoffDate;
-            console.log(`Column ${i} (${columns[i].label}): ${columnDate.toISOString()} >= ${cutoffDate.toISOString()} = ${isInRange}`);
-            
-            if (isInRange) {
-                visible.push(columns[i]);
-            } else {
-                // Since columns are sorted by date, we can stop once we hit an older one
-                break;
-            }
         }
     }
-    
-    console.log('getVisibleColumns result:', {
-        visibleCount: visible.length,
-        visibleLabels: visible.map(c => c.label)
-    });
-    
     return visible;
 }
 

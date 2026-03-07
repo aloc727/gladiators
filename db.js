@@ -118,26 +118,7 @@ async function getWarWeeks(limit = null) {
     
     const params = limit ? [limit] : [];
     const result = await pool.query(query, params);
-    
-    // Log raw database values to diagnose date issues
-    if (result.rows.length > 0) {
-        console.log('📊 Raw DB dates (first 5):', result.rows.slice(0, 5).map(r => {
-            // Convert Date objects to ISO strings for logging
-            const endDateStr = r.end_date instanceof Date ? r.end_date.toISOString() : (r.end_date ? String(r.end_date) : 'null');
-            const startDateStr = r.start_date instanceof Date ? r.start_date.toISOString() : (r.start_date ? String(r.start_date) : 'null');
-            return {
-                id: r.id,
-                end_date_raw: endDateStr,
-                end_date_type: typeof r.end_date,
-                end_date_isDate: r.end_date instanceof Date,
-                start_date_raw: startDateStr,
-                season_id: r.season_id,
-                section_index: r.section_index,
-                period_index: r.period_index
-            };
-        }));
-    }
-    
+
     return result.rows.map(row => {
         // Convert Date objects to ISO strings to preserve the exact date
         // PostgreSQL TIMESTAMP is returned as Date object by pg library

@@ -55,47 +55,15 @@ if (!API_KEY || !isValidApiKey(API_KEY)) {
 // Database helper functions (replacing JSON file operations)
 async function loadWarHistory() {
     try {
-        const warWeeks = await db.getWarWeeks(null); // Load all wars for debugging
-        console.log(`📊 Loaded ${warWeeks.length} war weeks from database`);
-        
-        // Log first 5 to see what we're getting
-        if (warWeeks.length > 0) {
-            console.log('Sample war weeks from DB:', warWeeks.slice(0, 5).map(w => ({
-                id: w.id,
-                endDate: w.endDate,
-                startDate: w.startDate,
-                seasonId: w.seasonId,
-                sectionIndex: w.sectionIndex,
-                periodIndex: w.periodIndex,
-                dataSource: w.dataSource
-            })));
-        }
-        
-        // Check for test wars specifically
-        const testWars = warWeeks.filter(w => w.dataSource === 'test_fake_data');
-        if (testWars.length > 0) {
-            console.log(`🧪 Found ${testWars.length} test wars:`, testWars.map(w => ({
-                id: w.id,
-                endDate: w.endDate,
-                seasonId: w.seasonId,
-                periodIndex: w.periodIndex
-            })));
-        }
-        
-        const warLog = [];
+        const warWeeks = await db.getWarWeeks(null);
         const seenIds = new Set();
-        
+        const warLog = [];
+
         for (const week of warWeeks) {
-            // Skip duplicates
-            if (seenIds.has(week.id)) {
-                console.warn(`⚠️  Skipping duplicate war week id: ${week.id}`);
-                continue;
-            }
+            if (seenIds.has(week.id)) continue;
             seenIds.add(week.id);
-            
+
             const participants = await db.getParticipantsByWarWeek(week.id);
-            
-            // Get member names for participants
             const participantData = await Promise.all(participants.map(async (p) => {
                 const member = await db.getMemberByTag(p.memberTag);
                 const rawData = typeof p.rawData === 'object' ? p.rawData : (p.rawData ? JSON.parse(p.rawData) : {});
@@ -104,30 +72,28 @@ async function loadWarHistory() {
                     name: member?.name || p.memberTag,
                     rank: p.rank,
                     warPoints: p.warPoints,
-                    fame: p.warPoints, // Alias for compatibility
+                    fame: p.warPoints,
                     decksUsed: p.decksUsed,
-                    battlesPlayed: p.decksUsed, // Alias for compatibility
+                    battlesPlayed: p.decksUsed,
                     boatAttacks: p.boatAttacks,
                     trophies: p.trophies,
-                    ...rawData // Merge any additional fields from raw data
+                    ...rawData
                 };
             }));
-            
-            // Preserve the date as-is from database (don't normalize)
+
             warLog.push({
                 id: week.id,
                 seasonId: week.seasonId,
                 sectionIndex: week.sectionIndex,
                 periodIndex: week.periodIndex,
                 startDate: week.startDate,
-                endDate: week.endDate, // Use as-is from database
+                endDate: week.endDate,
                 createdDate: week.createdDate,
                 dataSource: week.dataSource,
                 participants: participantData
             });
         }
-        
-        console.log(`✅ Processed ${warLog.length} unique war weeks into war log`);
+
         return warLog;
     } catch (error) {
         console.warn('⚠️  Failed to load war history from database:', error.message);
@@ -412,33 +378,54 @@ function getWarEntryKey(entry) {
     return entry.endDate || entry.createdDate || '';
 }
 
+/** Total fame/war points from participants. API may use fame or warPoints. */
+function totalParticipantPoints(participants) {
+    if (!Array.isArray(participants)) return 0;
+    return participants.reduce(
+        (sum, p) => sum + (Number(p.warPoints) || Number(p.fame) || 0),
+        0
+    );
+}
+
+/**
+ * Never overwrite the current week with zeroed data. After Monday 4:30am CT the API
+ * returns the new week (all zeros). Persist only non-zero data so final scores are correct.
+ */
+function isCurrentWeekZeroedOut(entry) {
+    const entryEnd = entry.endDate || entry.createdDate;
+    if (!entryEnd) return false;
+    const currentMonday = getCurrentWarEndKey().slice(0, 10);
+    const entryMonday = new Date(entryEnd).toISOString().slice(0, 10);
+    if (entryMonday !== currentMonday) return false;
+    return totalParticipantPoints(entry.participants) === 0;
+}
+
+function deriveStartDate(entry) {
+    if (entry.startDate) return entry.startDate;
+    const endSource = entry.endDate || entry.createdDate;
+    if (!endSource) return entry.createdDate;
+    const end = new Date(endSource);
+    const start = new Date(end);
+    start.setUTCDate(end.getUTCDate() - 4);
+    start.setUTCHours(4, 30, 0, 0);
+    return start.toISOString();
+}
+
 async function upsertWarEntry(entry, history) {
     const key = getWarEntryKey(entry);
     if (!key) return history;
 
+    if (isCurrentWeekZeroedOut(entry)) {
+        return history;
+    }
+
     try {
-        // Calculate start date if not provided (Thursday 4:30am CT, 4 days before Monday end)
-        let startDate = entry.startDate;
-        if (!startDate && entry.endDate) {
-            const endDateObj = new Date(entry.endDate);
-            startDate = new Date(endDateObj);
-            startDate.setDate(endDateObj.getDate() - 4);
-            startDate.setHours(4, 30, 0, 0);
-            startDate = startDate.toISOString();
-        } else if (!startDate && entry.createdDate) {
-            // Fallback: calculate from createdDate
-            const endDateObj = new Date(entry.createdDate);
-            startDate = new Date(endDateObj);
-            startDate.setDate(endDateObj.getDate() - 4);
-            startDate.setHours(4, 30, 0, 0);
-            startDate = startDate.toISOString();
-        }
-        
-        // Upsert war week
+        const startDate = deriveStartDate(entry);
+
         const warWeek = await db.upsertWarWeek({
-            seasonId: entry.seasonId || null,
-            sectionIndex: entry.sectionIndex || null,
-            periodIndex: entry.periodIndex || null,
+            seasonId: entry.seasonId ?? null,
+            sectionIndex: entry.sectionIndex ?? null,
+            periodIndex: entry.periodIndex ?? null,
             startDate: startDate || entry.createdDate,
             endDate: entry.endDate || entry.createdDate,
             createdDate: entry.createdDate || null,
@@ -488,35 +475,20 @@ async function upsertWarEntry(entry, history) {
     }
 }
 
+function warLogEntryKey(entry) {
+    return entry.id != null
+        ? `id:${entry.id}`
+        : `${entry.endDate || entry.createdDate || 'unknown'}-${entry.seasonId ?? 'null'}-${entry.periodIndex ?? 'null'}`;
+}
+
 function mergeWarLogs(primary, secondary) {
-    // Use a Map keyed by a unique identifier to prevent duplicates
-    // Use id if available, otherwise use endDate + seasonId + periodIndex
     const combinedMap = new Map();
-    
-    // Add all primary entries first
-    primary.forEach(entry => {
-        const key = entry.id ? `id:${entry.id}` : `${entry.endDate || entry.createdDate || 'unknown'}-${entry.seasonId || 'null'}-${entry.periodIndex || 'null'}`;
-        if (!combinedMap.has(key)) {
-            combinedMap.set(key, entry);
-        }
+    [...primary, ...secondary].forEach(entry => {
+        const key = warLogEntryKey(entry);
+        if (!combinedMap.has(key)) combinedMap.set(key, entry);
     });
-    
-    // Add secondary entries that don't already exist
-    secondary.forEach(entry => {
-        const key = entry.id ? `id:${entry.id}` : `${entry.endDate || entry.createdDate || 'unknown'}-${entry.seasonId || 'null'}-${entry.periodIndex || 'null'}`;
-        if (!combinedMap.has(key)) {
-            combinedMap.set(key, entry);
-        }
-    });
-    
     const combined = Array.from(combinedMap.values());
-    combined.sort((a, b) => {
-        const dateA = new Date(a.endDate || a.createdDate || 0);
-        const dateB = new Date(b.endDate || b.createdDate || 0);
-        return dateB - dateA;
-    });
-    
-    console.log(`🔀 mergeWarLogs: ${primary.length} primary + ${secondary.length} secondary = ${combined.length} total`);
+    combined.sort((a, b) => new Date(b.endDate || b.createdDate || 0) - new Date(a.endDate || a.createdDate || 0));
     return combined;
 }
 
@@ -538,20 +510,20 @@ const mimeTypes = {
     '.ico': 'image/x-icon'
 };
 
-// Serve static files
-function serveStaticFile(filePath, res) {
-    const ext = path.extname(filePath);
+function serveStaticFile(requestedPath, res) {
+    const base = path.resolve(__dirname);
+    const resolved = path.resolve(base, requestedPath.replace(/^\.\/?/, ''));
+    if (!resolved.startsWith(base) || resolved === base) {
+        res.writeHead(404, { 'Content-Type': 'text/html' });
+        res.end('<h1>404 Not Found</h1>');
+        return;
+    }
+    const ext = path.extname(resolved);
     const contentType = mimeTypes[ext] || 'application/octet-stream';
-    
-    fs.readFile(filePath, (err, content) => {
+    fs.readFile(resolved, (err, content) => {
         if (err) {
-            if (err.code === 'ENOENT') {
-                res.writeHead(404, { 'Content-Type': 'text/html' });
-                res.end('<h1>404 - File Not Found</h1>');
-            } else {
-                res.writeHead(500);
-                res.end(`Server Error: ${err.code}`);
-            }
+            res.writeHead(err.code === 'ENOENT' ? 404 : 500, { 'Content-Type': 'text/html' });
+            res.end(err.code === 'ENOENT' ? '<h1>404 Not Found</h1>' : '<h1>500 Server Error</h1>');
         } else {
             res.writeHead(200, { 'Content-Type': contentType });
             res.end(content, 'utf-8');
@@ -786,57 +758,32 @@ async function refreshServerCache() {
     }
 
     try {
-        // Load existing war history from database FIRST
         warHistoryCache = await loadWarHistory();
-        console.log(`📊 Loaded ${warHistoryCache.length} wars from database into cache`);
-        
-        const warlogEndpoint = `/v1/clans/%23${CLAN_TAG}/warlog`;
-        const data = await makeAPIRequestPromise(warlogEndpoint);
+        const data = await makeAPIRequestPromise(`/v1/clans/%23${CLAN_TAG}/warlog`);
         const items = (data.items || []).map(item => enrichWarEntry(item, 'warlog'));
-        console.log(`📊 Warlog API returned ${items.length} items`);
-        
-        // If warlog API returns data, merge it with database
-        // But prioritize database data since it has more history
         for (const entry of items) {
             warHistoryCache = await upsertWarEntry(entry, warHistoryCache);
         }
         warLogAvailable = true;
-        
-        // IMPORTANT: Put database wars FIRST, then API wars
-        // This ensures we keep all historical data from database
-        const combined = mergeWarLogs(warHistoryCache, items);
-        warLogCache = combined; // Temporarily remove limit for debugging
-        console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, ${items.length} from API, ${warHistoryCache.length} from DB)`);
+        warLogCache = mergeWarLogs(warHistoryCache, items);
     } catch (error) {
         warLogAvailable = false;
+        warHistoryCache = await loadWarHistory().catch(() => []);
+        warLogCache = warHistoryCache;
+
         if (error.message.includes('disabled') || error.message.includes('notFound')) {
             try {
-                // Load existing war history from database
-                warHistoryCache = await loadWarHistory();
-                console.log(`📊 Loaded ${warHistoryCache.length} wars from database (warlog API disabled)`);
-                
-                const riverRaceEndpoint = `/v1/clans/%23${CLAN_TAG}/currentriverrace`;
-                const riverData = await makeAPIRequestPromise(riverRaceEndpoint);
+                const riverData = await makeAPIRequestPromise(`/v1/clans/%23${CLAN_TAG}/currentriverrace`);
                 const currentEntries = convertRiverRaceToWarLog(riverData);
                 for (const entry of currentEntries) {
                     warHistoryCache = await upsertWarEntry(enrichWarEntry(entry, 'riverrace'), warHistoryCache);
                 }
-                // IMPORTANT: Put database wars FIRST, then current week
-                // This ensures we keep all historical data from database
-                const combined = mergeWarLogs(warHistoryCache, currentEntries);
-                warLogCache = combined; // Temporarily remove limit for debugging
-                console.log(`✅ War log cache updated: ${warLogCache.length} wars (from ${combined.length} total, ${currentEntries.length} from riverrace, ${warHistoryCache.length} from DB, warlog disabled)`);
-                    } catch (riverError) {
-                        console.warn('⚠️  Cache refresh failed for river race.');
-                        // Fallback: just use what we have from database
-                        warLogCache = warHistoryCache; // Temporarily remove limit for debugging
-                console.log(`📊 Using database-only cache: ${warLogCache.length} wars`);
+                warLogCache = mergeWarLogs(warHistoryCache, currentEntries);
+            } catch (riverError) {
+                console.warn('⚠️  River race fetch failed; using database cache.');
             }
-                } else {
-                    console.warn('⚠️  Cache refresh failed for war log.');
-                    // Fallback: use database cache
-                    warLogCache = warHistoryCache; // Temporarily remove limit for debugging
-            console.log(`📊 Using database-only cache after error: ${warLogCache.length} wars`);
+        } else {
+            console.warn('⚠️  War log fetch failed; using database cache.');
         }
     }
 
@@ -856,21 +803,16 @@ function scheduleCacheRefresh() {
     }, delay);
 }
 
-// SECURITY: Set security headers
 function setSecurityHeaders(res) {
-    // CORS - restrict to localhost in production, or specific domain
     const origin = process.env.ALLOWED_ORIGIN || '*';
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
-    // Security headers
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    
-    // Don't expose server information
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'");
     res.removeHeader('X-Powered-By');
 }
 
@@ -1009,17 +951,7 @@ const server = http.createServer((req, res) => {
     }
     
     if (pathname === '/api/clan/warlog') {
-        // Return historical wars only (exclude current week which updates every 5 min)
         const output = warLogCache.length ? warLogCache : getDemoWarLog();
-        console.log(`📤 Sending ${output.length} wars to frontend via /api/clan/warlog`);
-        if (output.length > 0 && output.length <= 5) {
-            console.log('📤 Sample of wars being sent:', output.slice(0, 3).map(w => ({
-                id: w.id,
-                endDate: w.endDate,
-                seasonId: w.seasonId,
-                participants: w.participants?.length || 0
-            })));
-        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ warLog: output }));
         return;
@@ -1086,7 +1018,7 @@ server.listen(PORT, async () => {
     // Load initial cache from database
     try {
         warHistoryCache = await loadWarHistory();
-        console.log(`📊 Loaded ${warHistoryCache.length} war weeks from database`);
+        console.log(`War history: ${warHistoryCache.length} weeks`);
     } catch (error) {
         console.warn('⚠️  Failed to load initial war history:', error.message);
     }
