@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "migrate": "node scripts/migrate-to-postgres.js"
+    "migrate": "node scripts/migrate-to-postgres.js",
+    "import-wars": "node scripts/import-spreadsheet-wars.js"
   },
   "keywords": [
     "clash-royale",
