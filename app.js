@@ -924,6 +924,14 @@ function renderTable(data) {
         headerRow.appendChild(weekHeader);
     });
 
+    // Average column (ignore N/A weeks; count 0 as 0)
+    const avgHeader = document.createElement('th');
+    avgHeader.className = 'sortable';
+    avgHeader.textContent = 'Average';
+    avgHeader.setAttribute('data-column', 'Average');
+    avgHeader.addEventListener('click', () => sortTable('Average', avgHeader));
+    headerRow.appendChild(avgHeader);
+
     tableHead.appendChild(headerRow);
 
     // Create data rows
@@ -987,6 +995,19 @@ function renderTable(data) {
             row.appendChild(scoreCell);
         });
 
+        // Average: ignore N/A weeks, count 0 as 0
+        const avgCell = document.createElement('td');
+        avgCell.className = 'score-cell';
+        const avg = getPlayerAverage(player.scores, columns);
+        if (avg === null) {
+            avgCell.textContent = 'N/A';
+            avgCell.classList.add('score-na');
+        } else {
+            avgCell.textContent = Math.round(avg);
+            avgCell.classList.add(getScoreClass(avg));
+        }
+        row.appendChild(avgCell);
+
         if (!player.isCurrent) {
             row.classList.add('former-member');
         }
@@ -1041,6 +1062,9 @@ function sortTable(column, headerElement, forceDirection = null) {
         } else if (column === 'rank') {
             aValue = getRankSortValue(a.currentRank, currentSort.direction);
             bValue = getRankSortValue(b.currentRank, currentSort.direction);
+        } else if (column === 'Average') {
+            aValue = getPlayerAverage(a.scores, columns) ?? (currentSort.direction === 'asc' ? Number.POSITIVE_INFINITY : -1);
+            bValue = getPlayerAverage(b.scores, columns) ?? (currentSort.direction === 'asc' ? Number.POSITIVE_INFINITY : -1);
         } else {
             aValue = getScoreSortValue(a.scores[column], currentSort.direction);
             bValue = getScoreSortValue(b.scores[column], currentSort.direction);
@@ -1087,6 +1111,21 @@ function getScoreSortValue(value, direction) {
         return direction === 'asc' ? Number.POSITIVE_INFINITY : -1;
     }
     return Number(value) || 0;
+}
+
+/** Average points per week. Ignores N/A (null/undefined); 0 counts as 0. Returns null if no valid weeks. */
+function getPlayerAverage(scores, columns) {
+    if (!scores || !columns || !columns.length) return null;
+    let sum = 0;
+    let count = 0;
+    columns.forEach(col => {
+        const v = scores[col.label];
+        if (v !== null && v !== undefined) {
+            sum += Number(v) || 0;
+            count += 1;
+        }
+    });
+    return count ? sum / count : null;
 }
 
 function getRankSortValue(value, direction) {

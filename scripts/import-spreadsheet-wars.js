@@ -15,17 +15,18 @@
 const fs = require('fs');
 const path = require('path');
 
-// Load .env if present
+// Load .env if present (same directory as package.json)
 const envPath = path.join(__dirname, '..', '.env');
 if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, 'utf8');
+    const envContent = fs.readFileSync(envPath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     envContent.split('\n').forEach(line => {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith('#')) {
-            const [key, ...valueParts] = trimmed.split('=');
-            if (key && valueParts.length > 0) {
-                const value = valueParts.join('=').replace(/^["']|["']$/g, '').trim();
-                process.env[key.trim()] = value;
+            const eq = trimmed.indexOf('=');
+            if (eq > 0) {
+                const key = trimmed.slice(0, eq).trim();
+                const value = trimmed.slice(eq + 1).replace(/^["']|["']$/g, '').trim();
+                process.env[key] = value;
             }
         }
     });
