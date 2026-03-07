@@ -906,6 +906,14 @@ function renderTable(data) {
     roleHeader.addEventListener('click', () => sortTable('role', roleHeader));
     headerRow.appendChild(roleHeader);
 
+    // Average column (ignore N/A weeks; count 0 as 0)
+    const avgHeader = document.createElement('th');
+    avgHeader.className = 'sortable';
+    avgHeader.textContent = 'Average';
+    avgHeader.setAttribute('data-column', 'Average');
+    avgHeader.addEventListener('click', () => sortTable('Average', avgHeader));
+    headerRow.appendChild(avgHeader);
+
     // Current week rank column
     const rankHeader = document.createElement('th');
     rankHeader.className = 'sortable';
@@ -923,14 +931,6 @@ function renderTable(data) {
         weekHeader.addEventListener('click', () => sortTable(column.label, weekHeader));
         headerRow.appendChild(weekHeader);
     });
-
-    // Average column (ignore N/A weeks; count 0 as 0)
-    const avgHeader = document.createElement('th');
-    avgHeader.className = 'sortable';
-    avgHeader.textContent = 'Average';
-    avgHeader.setAttribute('data-column', 'Average');
-    avgHeader.addEventListener('click', () => sortTable('Average', avgHeader));
-    headerRow.appendChild(avgHeader);
 
     tableHead.appendChild(headerRow);
 
@@ -975,6 +975,19 @@ function renderTable(data) {
         roleCell.innerHTML = `<span class="${roleClass}">${formatRole(player.role)}</span>`;
         row.appendChild(roleCell);
 
+        // Average: ignore N/A weeks, count 0 as 0
+        const avgCell = document.createElement('td');
+        avgCell.className = 'score-cell';
+        const avg = getPlayerAverage(player.scores, columns);
+        if (avg === null) {
+            avgCell.textContent = 'N/A';
+            avgCell.classList.add('score-na');
+        } else {
+            avgCell.textContent = Math.round(avg);
+            avgCell.classList.add(getScoreClass(avg));
+        }
+        row.appendChild(avgCell);
+
         // Current rank
         const rankCell = document.createElement('td');
         rankCell.textContent = player.currentRank ? `#${player.currentRank}` : '—';
@@ -994,19 +1007,6 @@ function renderTable(data) {
             }
             row.appendChild(scoreCell);
         });
-
-        // Average: ignore N/A weeks, count 0 as 0
-        const avgCell = document.createElement('td');
-        avgCell.className = 'score-cell';
-        const avg = getPlayerAverage(player.scores, columns);
-        if (avg === null) {
-            avgCell.textContent = 'N/A';
-            avgCell.classList.add('score-na');
-        } else {
-            avgCell.textContent = Math.round(avg);
-            avgCell.classList.add(getScoreClass(avg));
-        }
-        row.appendChild(avgCell);
 
         if (!player.isCurrent) {
             row.classList.add('former-member');
