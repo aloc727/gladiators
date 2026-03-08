@@ -855,8 +855,32 @@ function setSecurityHeaders(res) {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'");
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'");
     res.removeHeader('X-Powered-By');
+}
+
+// Simple in-memory rate limit: max requests per IP per window (reduce abuse / scraping)
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 120;
+const rateLimitMap = new Map();
+function isRateLimited(ip) {
+    const now = Date.now();
+    let bucket = rateLimitMap.get(ip);
+    if (!bucket) {
+        bucket = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+        rateLimitMap.set(ip, bucket);
+    }
+    if (now >= bucket.resetAt) {
+        bucket.count = 0;
+        bucket.resetAt = now + RATE_LIMIT_WINDOW_MS;
+    }
+    bucket.count++;
+    if (bucket.count > RATE_LIMIT_MAX_REQUESTS) return true;
+    return false;
+}
+function getClientIp(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
 }
 
 // Capture current week data every 5 minutes and OVERWRITE the existing entry
@@ -974,6 +998,14 @@ const server = http.createServer((req, res) => {
     
     // SECURITY: Set security headers on all responses
     setSecurityHeaders(res);
+
+    // SECURITY: Rate limit by IP (abuse / scraping prevention)
+    const clientIp = getClientIp(req);
+    if (isRateLimited(clientIp)) {
+        res.writeHead(429, { 'Content-Type': 'text/plain', 'Retry-After': '60' });
+        res.end('Too Many Requests');
+        return;
+    }
     
     // Handle OPTIONS request
     if (req.method === 'OPTIONS') {

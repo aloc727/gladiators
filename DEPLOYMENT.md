@@ -1,5 +1,9 @@
 # Deployment Guide - Making Your Site Public
 
+## Versioning and releases
+
+**Use branches for versions, not tags.** For each release, create a branch named `release/1.XX` (incrementing numbers, e.g. `release/1.23`, `release/1.24`). Merge into `main` and push. Do not create or rely on git tags for version markers.
+
 ## Restarting the app (systemd)
 
 ```bash

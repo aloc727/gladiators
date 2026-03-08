@@ -25,7 +25,19 @@ const MAX_WEEKS_DISPLAY = 1000; // Temporarily increased for debugging
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.21.0';
+const UI_VERSION = 'v1.23.0';
+
+/** Escape string for safe insertion into HTML / attributes (XSS prevention) */
+function escapeHtml(str) {
+    if (str == null) return '';
+    const s = String(str);
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -95,17 +107,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Member filter toggle (local only)
+    // Member filter toggle: default "current members only" checked; remember user choice
     const memberToggle = document.getElementById('currentMembersOnly');
     if (memberToggle) {
         const savedPreference = localStorage.getItem('currentMembersOnly');
         if (savedPreference !== null) {
             currentMembersOnly = savedPreference === 'true';
             memberToggle.checked = currentMembersOnly;
+        } else {
+            memberToggle.checked = true;
+            currentMembersOnly = true;
         }
         memberToggle.addEventListener('change', (e) => {
             currentMembersOnly = e.target.checked;
-            localStorage.setItem('currentMembersOnly', currentMembersOnly);
+            localStorage.setItem('currentMembersOnly', String(currentMembersOnly));
             renderView();
         });
     }
@@ -1008,8 +1023,8 @@ function renderTable(data) {
 
         // Role
         const roleCell = document.createElement('td');
-        const roleClass = `role-pill role-${(player.role || 'member').toLowerCase()}`;
-        roleCell.innerHTML = `<span class="${roleClass}">${formatRole(player.role)}</span>`;
+        const roleClass = `role-pill role-${escapeHtml((player.role || 'member').toLowerCase())}`;
+        roleCell.innerHTML = `<span class="${roleClass}">${escapeHtml(formatRole(player.role))}</span>`;
         row.appendChild(roleCell);
 
         // Average: ignore N/A weeks, count 0 as 0
@@ -1444,10 +1459,10 @@ function renderPlayersPage(data) {
             </thead>
             <tbody>
                 ${topPerformers.map(player => `
-                    <tr data-tag="${player.tag}" data-name="${player.name}">
+                    <tr data-tag="${escapeHtml(player.tag || '')}" data-name="${escapeHtml(player.name || '')}">
                         <td class="summary-player">
-                            ${player.name}
-                            ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                            ${escapeHtml(player.name || '')}
+                            ${player.tag ? `<span class="summary-tag">${escapeHtml(player.tag)}</span>` : ''}
                         </td>
                         <td>${formatChartValue(player.score)}</td>
                     </tr>
@@ -1466,10 +1481,10 @@ function renderPlayersPage(data) {
             </thead>
             <tbody>
                 ${improvements.map(player => `
-                    <tr data-tag="${player.tag}" data-name="${player.name}">
+                    <tr data-tag="${escapeHtml(player.tag || '')}" data-name="${escapeHtml(player.name || '')}">
                         <td class="summary-player">
-                            ${player.name}
-                            ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                            ${escapeHtml(player.name || '')}
+                            ${player.tag ? `<span class="summary-tag">${escapeHtml(player.tag)}</span>` : ''}
                         </td>
                         <td>${player.delta >= 0 ? `+${player.delta}` : player.delta}</td>
                     </tr>
@@ -1489,10 +1504,10 @@ function renderPlayersPage(data) {
             </thead>
             <tbody>
                 ${leaderboard.map(player => `
-                    <tr data-tag="${player.tag}" data-name="${player.name}">
+                    <tr data-tag="${escapeHtml(player.tag || '')}" data-name="${escapeHtml(player.name || '')}">
                         <td class="summary-player">
-                            ${player.name}
-                            ${player.tag ? `<span class="summary-tag">${player.tag}</span>` : ''}
+                            ${escapeHtml(player.name || '')}
+                            ${player.tag ? `<span class="summary-tag">${escapeHtml(player.tag)}</span>` : ''}
                         </td>
                         <td>${formatChartValue(player.total)}</td>
                         <td>${formatChartValue(player.average)}</td>
@@ -1629,8 +1644,8 @@ function renderDashboard() {
                     const recent = recentPromotionsMap.get(player.tag);
                     const daysAgo = recent ? Math.floor((Date.now() - new Date(recent.promotedAt).getTime()) / (24 * 60 * 60 * 1000)) : null;
                     const sub = daysAgo != null ? ` <span class="promotion-meta">(Promoted ${daysAgo}d ago)</span>` : '';
-                    const safeName = String(player.name || '').replace(/</g, '&lt;');
-                    const link = player.tag ? `<a href="#" class="player-link-summary" data-tag="${String(player.tag).replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
+                    const safeName = escapeHtml(player.name || '');
+                    const link = player.tag ? `<a href="#" class="player-link-summary" data-tag="${escapeHtml(player.tag)}" data-name="${safeName}">${safeName}</a>` : safeName;
                     return `<li class="list-item">${link}<span class="badge badge-promote">1600+ x12</span>${sub}</li>`;
                 }).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
             </ul>
@@ -1644,10 +1659,9 @@ function renderDashboard() {
             <h3>Recent Promotions</h3>
             <ul class="list">
                 ${recent.length ? recent.map(p => {
-                    const safeName = String(p.name || p.tag || '').replace(/</g, '&lt;');
-                    const tag = (p.tag || '').replace(/^#/, '');
-                    const link = tag ? `<a href="#" class="player-link-summary" data-tag="${String(p.tag || '').replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
-                    return `<li class="list-item">${link} <span class="badge badge-role">${formatPromotionRole(p.fromRole)} → ${formatPromotionRole(p.toRole)}</span> <span class="promotion-date">${formatPromotionDate(p.promotedAt)}</span></li>`;
+                    const safeName = escapeHtml(p.name || p.tag || '');
+                    const link = p.tag ? `<a href="#" class="player-link-summary" data-tag="${escapeHtml(p.tag)}" data-name="${safeName}">${safeName}</a>` : safeName;
+                    return `<li class="list-item">${link} <span class="badge badge-role">${escapeHtml(formatPromotionRole(p.fromRole))} → ${escapeHtml(formatPromotionRole(p.toRole))}</span> <span class="promotion-date">${escapeHtml(formatPromotionDate(p.promotedAt))}</span></li>`;
                 }).join('') : '<li class="list-item muted">No promotions yet.</li>'}
             </ul>
         `;
@@ -1660,10 +1674,9 @@ function renderDashboard() {
             <h3>Recent Demotions</h3>
             <ul class="list">
                 ${recentD.length ? recentD.map(d => {
-                    const safeName = String(d.name || d.tag || '').replace(/</g, '&lt;');
-                    const tag = (d.tag || '').replace(/^#/, '');
-                    const link = tag ? `<a href="#" class="player-link-summary" data-tag="${String(d.tag || '').replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
-                    return `<li class="list-item">${link} <span class="badge badge-demotion">${formatPromotionRole(d.fromRole)} → ${formatPromotionRole(d.toRole)}</span> <span class="promotion-date">${formatPromotionDate(d.demotedAt)}</span></li>`;
+                    const safeName = escapeHtml(d.name || d.tag || '');
+                    const link = d.tag ? `<a href="#" class="player-link-summary" data-tag="${escapeHtml(d.tag)}" data-name="${safeName}">${safeName}</a>` : safeName;
+                    return `<li class="list-item">${link} <span class="badge badge-demotion">${escapeHtml(formatPromotionRole(d.fromRole))} → ${escapeHtml(formatPromotionRole(d.toRole))}</span> <span class="promotion-date">${escapeHtml(formatPromotionDate(d.demotedAt))}</span></li>`;
                 }).join('') : '<li class="list-item muted">No demotions yet.</li>'}
             </ul>
         `;
@@ -1788,9 +1801,9 @@ function renderDashboard() {
         } else {
             demotionMessage = limitedDemotionList.map(player => {
                 const badgeText = player.reason === '12-wk avg < 1600' ? `12-wk avg ${player.score}` : (player.weeks ? `0 pts x${player.weeks}` : `${player.score} pts`);
-                const safeName = String(player.name || '').replace(/</g, '&lt;');
-                const link = player.tag ? `<a href="#" class="player-link-summary" data-tag="${String(player.tag).replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
-                return `<li class="list-item">${link}<span class="badge badge-demote">${badgeText}</span></li>`;
+                const safeName = escapeHtml(player.name || '');
+                const link = player.tag ? `<a href="#" class="player-link-summary" data-tag="${escapeHtml(player.tag)}" data-name="${safeName}">${safeName}</a>` : safeName;
+                return `<li class="list-item">${link}<span class="badge badge-demote">${escapeHtml(badgeText)}</span></li>`;
             }).join('');
         }
         
@@ -1839,6 +1852,6 @@ function updateTimestamp() {
         const now = new Date();
         const dateStr = now.toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'numeric', day: 'numeric', year: '2-digit' });
         const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Chicago' });
-        lastUpdatedElement.innerHTML = `Updated as of: <span class="text-date">${dateStr}, ${timeStr} CT</span>`;
+        lastUpdatedElement.innerHTML = `Updated as of: <span class="text-date">${escapeHtml(dateStr)}, ${escapeHtml(timeStr)} CT</span>`;
     }
 }

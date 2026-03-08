@@ -1,80 +1,61 @@
-# Security Guide
+# Security and Hardening
 
-## 🔒 API Key Security
+This document summarizes security measures and penetration-test considerations for the Gladiators Clan War Stats application.
 
-**CRITICAL: Your API key is sensitive and must be protected.**
+## Client-side (browser)
 
-### Best Practices
+### XSS prevention
+- **Central escaping:** All user- or API-sourced data inserted into the DOM is passed through `escapeHtml()` before use in `innerHTML` or attribute values. This includes player names, tags, role labels, and date strings.
+- **No unsanitized HTML:** Dynamic content is escaped for `&`, `<`, `>`, `"`, `'` to prevent script injection and attribute breakout.
+- **Trusted content only:** Static strings (e.g. labels, tooltips) are controlled by the codebase, not user input.
 
-1. **NEVER commit your API key to version control**
-   - The `.env` file is already in `.gitignore`
-   - Never add your API key to `server.js` or any other code file
-   - Never share your API key in screenshots, logs, or messages
+### Data exposure (doxxing / privacy)
+- The app displays **in-game clan data** (player names, tags, war scores, roles) that is already public to clan members via the game and API. No additional PII (email, real names, addresses) is collected or shown.
+- **LocalStorage** is used only for UI preferences (e.g. `currentRange`, `currentMembersOnly`). No secrets or tokens are stored in the client.
 
-2. **Use Environment Variables Only**
-   - Store your API key in a `.env` file (see `.env.example`)
-   - Or set it as an environment variable: `export CLASH_ROYALE_API_KEY=your-key`
-   - The server will automatically load from `.env` if it exists
+### External links
+- RoyaleAPI and GroupMe links open in a new tab with `rel="noopener noreferrer"` to reduce tab-napping and referrer leakage.
 
-3. **File Permissions**
-   - Ensure `.env` has restricted permissions:
-     ```bash
-     chmod 600 .env
-     ```
+## Server-side (Node.js)
 
-4. **If Your Key is Compromised**
-   - Immediately revoke it at https://developer.clashroyale.com/
-   - Generate a new API key
-   - Update your `.env` file with the new key
+### Secrets and configuration
+- **API key:** Clash Royale API key is read only from the environment (`CLASH_ROYALE_API_KEY`). It is never logged (except a masked preview in one startup message) and never sent to the client.
+- **Database:** Credentials come from environment variables (`DB_PASSWORD`, etc.). The app coerces the password to a string so the driver never receives a non-string value.
+- **`.env`:** Loaded only on the server; never served or exposed to the browser.
 
-## 🛡️ Security Features Implemented
+### Injection
+- **SQL:** All database queries use **parameterized statements** (`$1`, `$2`, …). User or API data is never concatenated into SQL strings.
+- **HTTP:** Responses use `Content-Type` correctly (JSON, HTML, or plain text). No user input is reflected into response headers in an exploitable way.
 
-- ✅ API key stored only in environment variables
-- ✅ API key never logged or exposed in error messages
-- ✅ Input validation to prevent SSRF attacks
-- ✅ Request timeouts to prevent hanging connections
-- ✅ Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
-- ✅ Error message sanitization
-- ✅ CORS configuration
+### HTTP security headers
+- **X-Content-Type-Options: nosniff** – Prevents MIME sniffing.
+- **X-Frame-Options: DENY** – Prevents embedding in iframes (clickjacking).
+- **X-XSS-Protection: 1; mode=block** – Legacy XSS filter (in addition to escaping).
+- **Referrer-Policy: strict-origin-when-cross-origin** – Limits referrer sent to other sites.
+- **Permissions-Policy** – Restricts geolocation, microphone, camera, payment.
+- **Content-Security-Policy** – Restricts script, style, font, image, and connect sources; `base-uri` and `form-action` set to `'self'`.
+- **X-Powered-By** removed to avoid revealing server stack.
 
-## 🚨 Production Deployment
+### Rate limiting
+- **In-memory rate limit** per client IP: 120 requests per 60-second window. Responses with `429 Too Many Requests` and `Retry-After: 60` when exceeded. Reduces abuse and aggressive scraping.
 
-If deploying to production:
+### CORS
+- API responses set CORS headers. Origin can be restricted via `ALLOWED_ORIGIN` (default `*` for same-origin or configured host).
 
-1. **Use HTTPS** - Never transmit API keys over HTTP
-2. **Restrict CORS** - Set `ALLOWED_ORIGIN` to your specific domain
-3. **Rate Limiting** - Consider adding rate limiting middleware
-4. **Secrets Management** - Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.)
-5. **Environment Variables** - Use your hosting platform's environment variable system
-6. **Monitoring** - Set up alerts for failed authentication attempts
+## Deployment recommendations
 
-## 📝 Setup Instructions
+1. **HTTPS:** Serve the site over HTTPS only (e.g. reverse proxy with TLS).
+2. **Environment:** Keep `.env` (or equivalent) out of version control and restrict file permissions.
+3. **Dependencies:** Run `npm audit` periodically and update dependencies for known vulnerabilities.
+4. **Database:** Use a dedicated DB user with minimal required privileges; avoid shared production credentials with other services.
 
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
+## Penetration-test checklist (summary)
 
-2. Edit `.env` and add your API key:
-   ```
-   CLASH_ROYALE_API_KEY=your-actual-api-key-here
-   ```
-
-3. Set proper file permissions:
-   ```bash
-   chmod 600 .env
-   ```
-
-4. Start the server:
-   ```bash
-   node server.js
-   ```
-
-## 🔍 Verification
-
-To verify your API key is secure:
-
-- ✅ Check that `.env` is in `.gitignore`
-- ✅ Verify `.env` is not tracked by git: `git status`
-- ✅ Confirm API key is not in any code files: `grep -r "your-api-key" .`
-- ✅ Check server logs don't show the full key (only first/last 4 chars)
+- [x] No API key or DB credentials in client or responses.
+- [x] All dynamic DOM content escaped via `escapeHtml()`.
+- [x] Parameterized SQL only; no string concatenation for queries.
+- [x] Security headers (CSP, X-Frame-Options, etc.) applied to responses.
+- [x] Rate limiting on server to mitigate brute-force and scraping.
+- [x] No sensitive PII beyond in-game clan data; localStorage used only for UI preferences.
+- [ ] Run over HTTPS in production (deployment responsibility).
+- [ ] Regular dependency and npm audit (operational).

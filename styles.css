@@ -147,9 +147,11 @@ h1 {
 }
 
 .table-container {
-    overflow-x: auto;
+    overflow: auto;
+    max-height: min(75vh, 800px);
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    -webkit-overflow-scrolling: touch;
 }
 
 #statsTable {
