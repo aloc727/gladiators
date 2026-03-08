@@ -295,18 +295,14 @@ async function fetchWarLog() {
     return warLog;
 }
 
-// Format date for war end (Monday at 4:30am CT)
+// Format date for war table column headers: M/D/YY (e.g. 3/5/26)
 function formatWarDate(dateString) {
     if (!dateString) return 'Unknown Date';
-    
     const date = new Date(dateString);
-    
-    // Format as "MM/DD/YYYY" (e.g., "01/14/2024")
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const year = date.getFullYear();
-    
-    return `${month}/${day}/${year}`;
+    const m = date.getMonth() + 1;
+    const day = date.getDate();
+    const y = String(date.getFullYear()).slice(-2);
+    return `${m}/${day}/${y}`;
 }
 
 function formatWarRange(endDate, startDate = null) {
@@ -668,14 +664,17 @@ function processWarData(members, warLog) {
         };
     });
 
-    const labelRangeRegex = /(\d{1,2}\/\d{1,2}\/\d{4})/g;
-    const dateOnlyRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+    const labelRangeRegex = /(\d{1,2}\/\d{1,2}\/\d{2,4})/g;
+    const dateOnlyRegex = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
     const seasonEndMap = new Set();
     columns.forEach(column => {
         if (!column.label || !column.label.includes('Season')) return;
         const matches = column.label.match(labelRangeRegex);
         if (!matches || !matches.length) return;
-        const endDate = new Date(matches[matches.length - 1]);
+        const lastMatch = matches[matches.length - 1];
+        const parts = lastMatch.split('/');
+        const y = (parts[2].length === 2 ? 2000 + parseInt(parts[2], 10) : parseInt(parts[2], 10));
+        const endDate = parts.length >= 3 ? new Date(y, parseInt(parts[0], 10) - 1, parseInt(parts[1], 10)) : new Date(lastMatch);
         endDate.setDate(endDate.getDate() + 1);
         const key = `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}`;
         seasonEndMap.add(key);
@@ -1352,10 +1351,8 @@ function renderHighlights(data) {
 
     const clanTotal = scores.reduce((sum, item) => sum + item.score, 0);
     const avgScore = scores.length ? Math.round(clanTotal / scores.length) : 0;
-    const promotions = latestData?.promotions || {};
-    const lastPromoted = promotions.lastPromoted;
 
-    let cards = `
+    highlightsEl.innerHTML = `
         <div class="highlight-card">
             <h4>Current Week Total</h4>
             <p>${clanTotal} points</p>
@@ -1365,30 +1362,6 @@ function renderHighlights(data) {
             <p>${avgScore} points</p>
         </div>
     `;
-    if (lastPromoted && lastPromoted.name) {
-        const from = formatPromotionRole(lastPromoted.fromRole);
-        const to = formatPromotionRole(lastPromoted.toRole);
-        const dateStr = formatPromotionDate(lastPromoted.promotedAt);
-        cards += `
-        <div class="highlight-card highlight-card-promotion">
-            <h4>Last Promoted</h4>
-            <p><strong>${String(lastPromoted.name).replace(/</g, '&lt;')}</strong><br>${from} → ${to}${dateStr ? `<br><span class="highlight-date">${dateStr}</span>` : ''}</p>
-        </div>
-        `;
-    }
-    const lastDemoted = promotions.lastDemoted;
-    if (lastDemoted && lastDemoted.name) {
-        const from = formatPromotionRole(lastDemoted.fromRole);
-        const to = formatPromotionRole(lastDemoted.toRole);
-        const dateStr = formatPromotionDate(lastDemoted.demotedAt);
-        cards += `
-        <div class="highlight-card highlight-card-demotion">
-            <h4>Last Demoted</h4>
-            <p><strong>${String(lastDemoted.name).replace(/</g, '&lt;')}</strong><br>${from} → ${to}${dateStr ? `<br><span class="highlight-date">${dateStr}</span>` : ''}</p>
-        </div>
-        `;
-    }
-    highlightsEl.innerHTML = cards;
 }
 
 function renderPlayersPage(data) {
@@ -1654,19 +1627,7 @@ function renderDashboard() {
         `;
     }
 
-    const lastDemotedEl = document.getElementById('lastDemotedCard');
     const recentDemotionsEl = document.getElementById('recentDemotionsCard');
-    if (lastDemotedEl && promotionsData.lastDemoted && promotionsData.lastDemoted.name) {
-        const ld = promotionsData.lastDemoted;
-        lastDemotedEl.innerHTML = `
-            <h3>Last Demoted</h3>
-            <p class="last-promoted-name">${String(ld.name).replace(/</g, '&lt;')}</p>
-            <p class="last-promoted-role">${formatPromotionRole(ld.fromRole)} → ${formatPromotionRole(ld.toRole)}</p>
-            <p class="last-promoted-date">${formatPromotionDate(ld.demotedAt)}</p>
-        `;
-    } else if (lastDemotedEl) {
-        lastDemotedEl.innerHTML = '<h3>Last Demoted</h3><p class="muted">No demotions recorded yet.</p>';
-    }
     if (recentDemotionsEl) {
         const recentD = (promotionsData.recentDemotions || []).slice(0, 8);
         recentDemotionsEl.innerHTML = `
@@ -1820,7 +1781,7 @@ function renderDashboard() {
         const minimumPercent = Math.min(totalPoints / requiredMinimum, 1);
         const fillPercent = Math.min(momentumPercent * 100, 100);
         strategyEl.innerHTML = `
-            <h3>Momentum & Strategy</h3>
+            <h3>Momentum</h3>
             <div class="thermo-widget">
                 <div class="thermo-scale">
                     <span>180k</span>
