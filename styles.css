@@ -67,6 +67,96 @@ h1 {
     font-size: 1.1em;
     margin-bottom: 5px;
 }
+.clan-tag a {
+    color: #2c54c7;
+    text-decoration: none;
+}
+.clan-tag a:hover {
+    text-decoration: underline;
+}
+.copy-tag-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    padding: 4px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #4b5563;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.copy-tag-btn:hover {
+    background: #f3f4f6;
+    color: #1f2937;
+}
+.copy-tag-btn:focus {
+    outline: 2px solid #2c54c7;
+    outline-offset: 2px;
+}
+.copy-icon {
+    display: block;
+}
+
+/* Screen reader only: visible to assistive tech, hidden visually */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Skip link: visible on focus for keyboard users */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 16px;
+    background: #243b8f;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 100;
+    transition: top 0.2s;
+}
+.skip-link:focus {
+    top: 12px;
+    outline: 3px solid #f59e0b;
+    outline-offset: 2px;
+}
+
+.summary-legend {
+    text-align: center;
+    color: #4b5563;
+    font-size: 0.95em;
+    margin: 0 0 16px;
+}
+
+.btn-download-csv {
+    padding: 8px 14px;
+    border: 1px solid #2c54c7;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: #2c54c7;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+}
+.btn-download-csv:hover {
+    background: #e0e7ff;
+}
+.btn-download-csv:focus {
+    outline: 2px solid #2c54c7;
+    outline-offset: 2px;
+}
 
 .last-updated {
     color: #6b7280;
@@ -93,7 +183,7 @@ h1 {
 }
 
 .brand-text {
-    text-align: left;
+    text-align: center;
 }
 
 .hero-art {
@@ -541,6 +631,11 @@ td:not(:first-child) {
 
 .menu-tab:hover {
     background: #eef2ff;
+}
+.menu-tab:focus-visible,
+.range-tab:focus-visible {
+    outline: 2px solid #2c54c7;
+    outline-offset: 2px;
 }
 
 .menu-tab.active {

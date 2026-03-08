@@ -11,13 +11,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Slab:wght@600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <div class="container">
-        <header>
+        <header role="banner">
             <div class="brand">
                 <img src="/logo-cr.jpg?v=1" alt="Clash Royale logo" class="brand-logo" onerror="this.src='/favicon.png?v=1'">
                 <div class="brand-text">
                     <h1>Gladiators Clan War Stats</h1>
-                    <p class="clan-tag">Clan Tag: #2CPPJLJ</p>
+                    <p class="clan-tag">Clan Tag: <a href="https://royaleapi.com/clan/2CPPJLJ" target="_blank" rel="noopener noreferrer" id="clanTagLink">#2CPPJLJ</a> <button type="button" class="copy-tag-btn" id="copyClanTagBtn" aria-label="Copy clan tag to clipboard" title="Copy #2CPPJLJ"><svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></p>
                 </div>
             </div>
             <p class="last-updated" id="lastUpdated">Updated as of: --</p>
@@ -29,7 +30,7 @@
                 <span></span>
                 <span></span>
             </button>
-            <nav class="menu-tabs" id="menuTabs">
+            <nav class="menu-tabs" id="menuTabs" role="navigation" aria-label="Main navigation">
                 <button class="menu-tab active" data-tab="table" data-route="/">War Table</button>
                 <button class="menu-tab" data-tab="summary" data-route="/summary">Summary</button>
                 <button class="menu-tab" data-tab="players" data-route="/players">Players</button>
@@ -37,7 +38,8 @@
             </nav>
         </div>
 
-        <section class="tab-panel active" id="tab-table">
+        <main id="main-content" role="main" tabindex="-1">
+        <section class="tab-panel active" id="tab-table" aria-label="War table">
             <div class="legend">
                 <span class="legend-item legend-green">1600+ (On Track)</span>
                 <span class="legend-item legend-yellow">800 - 1599 (Needs Nudge)</span>
@@ -65,10 +67,12 @@
             <div class="controls">
                 <div class="loading" id="loading" style="display: none;">Loading...</div>
                 <span class="next-refresh" id="nextRefresh">Next refresh in: --</span>
+                <button type="button" class="btn-download-csv" id="downloadCsvBtn" aria-label="Download War Table as CSV">Download CSV</button>
             </div>
             
             <div class="table-container" id="tableView">
                 <table id="statsTable">
+                    <caption class="sr-only">War table: player names, roles, and weekly war points. Green is on track (1600+), yellow needs nudge (800–1599), red at risk.</caption>
                     <thead id="tableHead">
                         <tr>
                             <th class="sortable" data-column="player">Player Name</th>
@@ -84,8 +88,9 @@
             <div id="errorMessage" class="error" style="display: none;"></div>
         </section>
 
-        <section class="tab-panel" id="tab-summary">
+        <section class="tab-panel" id="tab-summary" aria-label="Summary dashboard">
             <section class="highlights" id="highlights"></section>
+            <p class="summary-legend" id="summaryLegend">Green = on track (1600+), yellow = nudge (800–1599), red = at risk.</p>
 
             <section class="dashboard">
                 <div class="dashboard-card" id="clanStats"></div>
@@ -110,7 +115,7 @@
             </section>
         </section>
 
-        <section class="tab-panel" id="tab-players">
+        <section class="tab-panel" id="tab-players" aria-label="Players and leaderboards">
             <section class="summary-tables">
                 <div class="summary-card">
                     <h3>Top Performers (Current Week)</h3>
@@ -127,7 +132,8 @@
             </section>
         </section>
 
-        <footer class="site-footer">
+        </main>
+        <footer class="site-footer" role="contentinfo">
             <span class="version-tag" id="uiVersion">UI v1.13.0</span>
         </footer>
     </div>

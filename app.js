@@ -11,6 +11,7 @@ let countdownTimer = null;
 let nextRefreshTime = null; // Track when the next refresh is scheduled
 
 let latestData = null;
+let lastDataUpdatedAt = null; // For relative "last updated" display
 let currentTab = 'table';
 // Initialize currentRange from localStorage or default to 'all'
 let currentRange = localStorage.getItem('currentRange') || 'all';
@@ -132,6 +133,28 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         focusPlayerRow(a.getAttribute('data-tag') || '', a.getAttribute('data-name') || '');
     });
+
+    // Copy clan tag to clipboard
+    const copyClanTagBtn = document.getElementById('copyClanTagBtn');
+    if (copyClanTagBtn) {
+        copyClanTagBtn.addEventListener('click', () => {
+            const tag = '#2CPPJLJ';
+            navigator.clipboard.writeText(tag).then(() => {
+                copyClanTagBtn.setAttribute('title', 'Copied!');
+                copyClanTagBtn.setAttribute('aria-label', 'Clan tag copied to clipboard');
+                setTimeout(() => {
+                    copyClanTagBtn.setAttribute('title', 'Copy #2CPPJLJ');
+                    copyClanTagBtn.setAttribute('aria-label', 'Copy clan tag to clipboard');
+                }, 2000);
+            }).catch(() => {});
+        });
+    }
+
+    // Download War Table as CSV
+    const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+    if (downloadCsvBtn) {
+        downloadCsvBtn.addEventListener('click', () => downloadWarTableCsv());
+    }
 });
 
 // Schedule the next automatic refresh
@@ -256,10 +279,14 @@ async function loadData() {
         
         // Store and render view
         latestData = processedData;
+        lastDataUpdatedAt = Date.now();
         renderView();
         
-        // Update timestamp
+        // Update timestamp (relative + exact in tooltip)
         updateTimestamp();
+        if (!window._relativeTimeInterval) {
+            window._relativeTimeInterval = setInterval(updateTimestamp, 60000); // Refresh "X min ago" every minute
+        }
         
         // Reset countdown after successful load
         updateCountdown();
@@ -996,12 +1023,17 @@ function renderTable(data) {
         } else {
             nameCell.textContent = player.name || '';
         }
-        nameCell.title = nameCell.title || player.tag || '';
+        if (player.joinedRecently && player.firstSeen) {
+            nameCell.title = formatJoinedAgo(player.firstSeen);
+        } else {
+            nameCell.title = nameCell.title || player.tag || '';
+        }
 
         if (player.joinedRecently) {
             const badge = document.createElement('span');
             badge.className = 'name-new-tag';
             badge.textContent = 'NEW';
+            badge.title = player.firstSeen ? formatJoinedAgo(player.firstSeen) : 'New member';
             nameCell.appendChild(badge);
         }
 
@@ -1253,6 +1285,37 @@ function renderView() {
     renderDashboard();
     renderPlayersPage(viewData);
     renderTabVisibility();
+}
+
+function escapeCsvCell(value) {
+    if (value == null) return '';
+    const s = String(value);
+    if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+}
+
+function downloadWarTableCsv() {
+    if (!latestData?.columns?.length) return;
+    const columns = getVisibleColumns(latestData.columns);
+    const players = latestData.players.filter(player => (currentMembersOnly ? player.isCurrent : true));
+    const headerRow = ['Player Name', 'Tag', 'Role', ...columns.map(c => c.displayLabel || c.label)];
+    const rows = [headerRow.map(escapeCsvCell).join(',')];
+    players.forEach(player => {
+        const row = [
+            player.name || '',
+            player.tag || '',
+            player.role || '',
+            ...columns.map(col => player.scores[col.label] != null ? player.scores[col.label] : 'N/A')
+        ];
+        rows.push(row.map(escapeCsvCell).join(','));
+    });
+    const csv = rows.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gladiators-war-table-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
 }
 
 function applySavedSortOrDefault(columns) {
@@ -1845,13 +1908,58 @@ function renderDashboard() {
     }
 }
 
-// Update the "Updated as of" timestamp (date as M/D/YY, e.g. 3/5/26, in CT)
+// Human-readable "how long ago" for join date (e.g. "Joined 1 wk, 2 days and 20 hrs ago")
+function formatJoinedAgo(firstSeen) {
+    if (!firstSeen) return '';
+    const then = new Date(firstSeen).getTime();
+    if (isNaN(then)) return '';
+    const diffMs = Date.now() - then;
+    const sec = Math.floor(diffMs / 1000);
+    const min = Math.floor(sec / 60);
+    const hr = Math.floor(min / 60);
+    const day = Math.floor(hr / 24);
+    const wk = Math.floor(day / 7);
+    const parts = [];
+    if (wk > 0) parts.push(wk + ' wk');
+    const daysRem = day % 7;
+    if (daysRem > 0) parts.push(daysRem + ' day' + (daysRem !== 1 ? 's' : ''));
+    const hrsRem = hr % 24;
+    if (hrsRem > 0 && (wk > 0 || day > 0)) parts.push(hrsRem + ' hr' + (hrsRem !== 1 ? 's' : ''));
+    if (wk === 0 && day === 0 && hr > 0) parts.push(hr + ' hr' + (hr !== 1 ? 's' : ''));
+    if (wk === 0 && day === 0 && hr === 0 && min > 0) parts.push(min + ' min');
+    if (parts.length === 0) return 'Joined just now';
+    const joined = parts.length === 1 ? parts[0] : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+    return 'Joined ' + joined + ' ago';
+}
+
+// Relative time string (e.g. "2 min ago", "just now")
+function getRelativeTimeString(ms) {
+    if (ms == null) return '--';
+    const sec = Math.floor((Date.now() - ms) / 1000);
+    if (sec < 10) return 'just now';
+    if (sec < 60) return `${sec} sec ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min} min ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr} hr ago`;
+    const day = Math.floor(hr / 24);
+    return `${day} day${day !== 1 ? 's' : ''} ago`;
+}
+
+// Update the "Last updated" display: relative time (updates every minute) with exact time in tooltip
 function updateTimestamp() {
     const lastUpdatedElement = document.getElementById('lastUpdated');
-    if (lastUpdatedElement) {
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'numeric', day: 'numeric', year: '2-digit' });
-        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Chicago' });
-        lastUpdatedElement.innerHTML = `Updated as of: <span class="text-date">${escapeHtml(dateStr)}, ${escapeHtml(timeStr)} CT</span>`;
+    if (!lastUpdatedElement) return;
+    if (lastDataUpdatedAt == null) {
+        lastUpdatedElement.textContent = 'Updated: --';
+        lastUpdatedElement.title = '';
+        return;
     }
+    const exactDate = new Date(lastDataUpdatedAt);
+    const dateStr = exactDate.toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'numeric', day: 'numeric', year: '2-digit' });
+    const timeStr = exactDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Chicago' });
+    const exactTooltip = `${dateStr}, ${timeStr} CT`;
+    const relative = getRelativeTimeString(lastDataUpdatedAt);
+    lastUpdatedElement.innerHTML = `Updated: <span class="text-date" aria-live="polite">${escapeHtml(relative)}</span>`;
+    lastUpdatedElement.title = exactTooltip;
 }
