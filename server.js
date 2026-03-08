@@ -447,19 +447,39 @@ async function upsertWarEntry(entry, history) {
             dataSource: entry.dataSource || entry.source || 'riverrace'
         });
 
-        // Upsert participants
+        // Upsert participants (ensure member exists first to avoid FK violation)
         if (entry.participants && Array.isArray(entry.participants)) {
+            const now = new Date().toISOString();
             for (const participant of entry.participants) {
-                await db.upsertParticipant({
-                    warWeekId: warWeek.id,
-                    memberTag: participant.tag,
-                    rank: participant.rank || null,
-                    warPoints: participant.warPoints || participant.fame || null,
-                    decksUsed: participant.decksUsed || participant.battlesPlayed || null,
-                    boatAttacks: participant.boatAttacks || null,
-                    trophies: participant.trophies || null,
-                    rawData: participant // Store full participant object
-                });
+                const tag = participant.tag;
+                if (!tag) continue;
+                try {
+                    const existingMember = await db.getMemberByTag(tag);
+                    if (!existingMember) {
+                        await db.upsertMember({
+                            tag,
+                            name: participant.name || tag,
+                            role: 'member',
+                            firstSeen: now,
+                            joinedAt: now,
+                            lastSeen: now,
+                            tenureKnown: false,
+                            isCurrent: true
+                        });
+                    }
+                    await db.upsertParticipant({
+                        warWeekId: warWeek.id,
+                        memberTag: tag,
+                        rank: participant.rank || null,
+                        warPoints: participant.warPoints || participant.fame || null,
+                        decksUsed: participant.decksUsed || participant.battlesPlayed || null,
+                        boatAttacks: participant.boatAttacks || null,
+                        trophies: participant.trophies || null,
+                        rawData: participant
+                    });
+                } catch (participantErr) {
+                    console.warn('⚠️  Failed to upsert participant', tag, participantErr.message);
+                }
             }
         }
 
@@ -486,6 +506,8 @@ async function upsertWarEntry(entry, history) {
         return history.slice(0, HISTORY_MAX_WEEKS);
     } catch (error) {
         console.warn('⚠️  Failed to upsert war entry to database:', error.message);
+        if (error.code) console.warn('   Postgres code:', error.code);
+        if (error.detail) console.warn('   Detail:', error.detail);
         return history; // Return unchanged history on error
     }
 }
