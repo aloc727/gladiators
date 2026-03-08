@@ -346,6 +346,56 @@ td:not(:first-child) {
     color: #b42318;
 }
 
+.badge-role {
+    background: #eef2ff;
+    color: #4338ca;
+    font-size: 10px;
+}
+
+.highlight-card-promotion {
+    border-color: #c7d2fe;
+    background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);
+}
+
+.highlight-date {
+    font-size: 0.9em;
+    color: #64748b;
+}
+
+.last-promoted-name {
+    font-weight: 700;
+    color: #1f2937;
+    margin: 4px 0 2px;
+}
+
+.last-promoted-role {
+    color: #4338ca;
+    font-size: 0.95em;
+    margin: 2px 0;
+}
+
+.last-promoted-date {
+    font-size: 0.85em;
+    color: #64748b;
+    margin: 2px 0 0;
+}
+
+.promotion-meta {
+    font-size: 0.8em;
+    color: #64748b;
+    font-weight: 400;
+}
+
+.promotion-date {
+    font-size: 0.8em;
+    color: #64748b;
+}
+
+.muted {
+    color: #94a3b8;
+    font-style: italic;
+}
+
 .strategy-text {
     color: #4b5563;
     font-size: 0.9em;

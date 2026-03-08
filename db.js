@@ -337,6 +337,58 @@ async function getSnapshotsByWarWeek(warWeekId) {
 }
 
 /**
+ * Promotion History (Member -> Elder -> Co-Leader)
+ */
+const ROLE_RANK = { member: 1, elder: 2, coleader: 3, leader: 4 };
+
+function isPromotion(fromRole, toRole) {
+    const from = ROLE_RANK[(fromRole || '').toLowerCase()] || 0;
+    const to = ROLE_RANK[(toRole || '').toLowerCase()] || 0;
+    return to > from && from >= 1 && to <= 4;
+}
+
+async function recordPromotion(memberTag, fromRole, toRole) {
+    if (!memberTag || !fromRole || !toRole || !isPromotion(fromRole, toRole)) return null;
+    const result = await pool.query(
+        `INSERT INTO promotion_history (member_tag, from_role, to_role)
+         VALUES ($1, $2, $3) RETURNING *`,
+        [memberTag, (fromRole || '').toLowerCase(), (toRole || '').toLowerCase()]
+    );
+    return result.rows[0] ? { id: result.rows[0].id, memberTag, fromRole, toRole, promotedAt: result.rows[0].promoted_at } : null;
+}
+
+async function getLastPromotion() {
+    const result = await pool.query(
+        `SELECT ph.*, m.name FROM promotion_history ph
+         LEFT JOIN members m ON m.tag = ph.member_tag
+         ORDER BY ph.promoted_at DESC LIMIT 1`
+    );
+    if (result.rows.length === 0) return null;
+    const r = result.rows[0];
+    return { tag: r.member_tag, name: r.name || r.member_tag, fromRole: r.from_role, toRole: r.to_role, promotedAt: r.promoted_at };
+}
+
+async function getRecentPromotions(limit = 10) {
+    const result = await pool.query(
+        `SELECT ph.*, m.name FROM promotion_history ph
+         LEFT JOIN members m ON m.tag = ph.member_tag
+         ORDER BY ph.promoted_at DESC LIMIT $1`,
+        [limit]
+    );
+    return result.rows.map(r => ({ tag: r.member_tag, name: r.name || r.member_tag, fromRole: r.from_role, toRole: r.to_role, promotedAt: r.promoted_at }));
+}
+
+async function getPromotionsByMember(tag) {
+    const result = await pool.query(
+        'SELECT * FROM promotion_history WHERE member_tag = $1 ORDER BY promoted_at DESC LIMIT 1',
+        [tag]
+    );
+    if (result.rows.length === 0) return null;
+    const r = result.rows[0];
+    return { fromRole: r.from_role, toRole: r.to_role, promotedAt: r.promoted_at };
+}
+
+/**
  * Utility Functions
  */
 
@@ -375,10 +427,10 @@ async function initializeSchema() {
         SELECT table_name 
         FROM information_schema.tables 
         WHERE table_schema = 'public' 
-        AND table_name IN ('members', 'war_weeks', 'war_participants', 'war_snapshots')
+        AND table_name IN ('members', 'war_weeks', 'war_participants', 'war_snapshots', 'promotion_history')
     `);
     
-    if (tables.rows.length === 4) {
+    if (tables.rows.length >= 4) {
         console.log('✅ Database schema initialized (all tables created)');
     } else {
         console.log(`⚠️  Database schema initialized, but only ${tables.rows.length}/4 tables found`);
@@ -409,6 +461,13 @@ module.exports = {
     // Snapshots
     saveSnapshot,
     getSnapshotsByWarWeek,
+    
+    // Promotions
+    isPromotion,
+    recordPromotion,
+    getLastPromotion,
+    getRecentPromotions,
+    getPromotionsByMember,
     
     // Utility
     initializeSchema,

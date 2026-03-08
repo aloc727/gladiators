@@ -312,8 +312,8 @@ async function attachMemberHistory(memberList) {
             const firstSeen = existing?.firstSeen || now;
             const joinedAt = existing?.joinedAt || now;
             const tenureKnown = existing?.tenureKnown ?? !isFirstRun;
+            const previousRole = existing?.role || null;
 
-            // Upsert member in database
             await db.upsertMember({
                 tag: member.tag,
                 name: member.name,
@@ -324,6 +324,14 @@ async function attachMemberHistory(memberList) {
                 tenureKnown,
                 isCurrent: true
             });
+
+            if (previousRole && db.isPromotion(previousRole, member.role)) {
+                try {
+                    await db.recordPromotion(member.tag, previousRole, member.role);
+                } catch (e) {
+                    console.warn('Failed to record promotion:', e.message);
+                }
+            }
 
             enriched.push({ ...member, firstSeen, joinedAt, tenureKnown, isCurrent: true });
         }
@@ -963,6 +971,19 @@ const server = http.createServer((req, res) => {
         return;
     }
     
+    if (pathname === '/api/clan/promotions') {
+        Promise.all([db.getLastPromotion(), db.getRecentPromotions(10)])
+            .then(([lastPromoted, recent]) => {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ lastPromoted, recent: recent || [] }));
+            })
+            .catch(() => {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ lastPromoted: null, recent: [] }));
+            });
+        return;
+    }
+
     if (pathname === '/api/clan/current-war') {
         // Return current week from riverrace API (separate from historical)
         if (!API_KEY || !isValidApiKey(API_KEY)) {

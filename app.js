@@ -198,9 +198,16 @@ async function loadData() {
         const warLog = currentWar ? [currentWar, ...historicalWars] : historicalWars;
         console.log(`📥 Frontend: Combined ${warLog.length} total wars to process`);
         
+        // Fetch promotion history (for summary and promotion-ready box)
+        const promotions = await fetch(`${API_BASE_URL}/api/clan/promotions`)
+            .then(r => r.json())
+            .then(d => ({ lastPromoted: d.lastPromoted || null, recent: d.recent || [] }))
+            .catch(() => ({ lastPromoted: null, recent: [] }));
+
         // Process data
         const processedData = processWarData(members, warLog);
-        
+        processedData.promotions = promotions;
+
         // Debug: Log data summary
         console.log('=== DATA LOADED ===');
         console.log('Members:', members.length);
@@ -1299,6 +1306,20 @@ function focusPlayerRow(playerTag, playerName) {
     setTimeout(() => match.classList.remove('row-highlight'), 1800);
 }
 
+function formatPromotionRole(role) {
+    if (!role) return '';
+    const r = (role || '').toLowerCase();
+    if (r === 'coleader') return 'Co-Leader';
+    return (role || '').charAt(0).toUpperCase() + (role || '').slice(1).toLowerCase();
+}
+
+function formatPromotionDate(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function renderHighlights(data) {
     const { players, columns } = data;
     const highlightsEl = document.getElementById('highlights');
@@ -1318,7 +1339,10 @@ function renderHighlights(data) {
 
     const clanTotal = scores.reduce((sum, item) => sum + item.score, 0);
     const avgScore = scores.length ? Math.round(clanTotal / scores.length) : 0;
-    highlightsEl.innerHTML = `
+    const promotions = latestData?.promotions || {};
+    const lastPromoted = promotions.lastPromoted;
+
+    let cards = `
         <div class="highlight-card">
             <h4>Current Week Total</h4>
             <p>${clanTotal} points</p>
@@ -1328,6 +1352,18 @@ function renderHighlights(data) {
             <p>${avgScore} points</p>
         </div>
     `;
+    if (lastPromoted && lastPromoted.name) {
+        const from = formatPromotionRole(lastPromoted.fromRole);
+        const to = formatPromotionRole(lastPromoted.toRole);
+        const dateStr = formatPromotionDate(lastPromoted.promotedAt);
+        cards += `
+        <div class="highlight-card highlight-card-promotion">
+            <h4>Last Promoted</h4>
+            <p><strong>${String(lastPromoted.name).replace(/</g, '&lt;')}</strong><br>${from} → ${to}${dateStr ? `<br><span class="highlight-date">${dateStr}</span>` : ''}</p>
+        </div>
+        `;
+    }
+    highlightsEl.innerHTML = cards;
 }
 
 function renderPlayersPage(data) {
@@ -1547,17 +1583,60 @@ function renderDashboard() {
         `;
     }
 
-    const promotionList = players
-        .filter(player => player.promotionReady)
-        .slice(0, 8);
+    const promotionsData = latestData.promotions || {};
+    const recentPromotionsMap = new Map();
+    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    (promotionsData.recent || []).forEach(p => {
+        const at = new Date(p.promotedAt).getTime();
+        if (at >= ninetyDaysAgo) recentPromotionsMap.set(p.tag, p);
+    });
+
+    const promotionReadyPlayers = players.filter(player => player.promotionReady);
+    const promotionList = [...promotionReadyPlayers]
+        .sort((a, b) => {
+            const aRecent = recentPromotionsMap.get(a.tag);
+            const bRecent = recentPromotionsMap.get(b.tag);
+            if (aRecent && !bRecent) return 1;
+            if (!aRecent && bRecent) return -1;
+            return 0;
+        })
+        .slice(0, 10);
 
     if (promotionEl) {
         promotionEl.innerHTML = `
-            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks).">?</span></h3>
+            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks). Recently promoted (90 days) shown at bottom.">?</span></h3>
             <ul class="list">
-                ${promotionList.length ? promotionList.map(player => `
-                    <li class="list-item"><span>${player.name}</span><span class="badge badge-promote">1600+ x12</span></li>
-                `).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
+                ${promotionList.length ? promotionList.map(player => {
+                    const recent = recentPromotionsMap.get(player.tag);
+                    const daysAgo = recent ? Math.floor((Date.now() - new Date(recent.promotedAt).getTime()) / (24 * 60 * 60 * 1000)) : null;
+                    const sub = daysAgo != null ? ` <span class="promotion-meta">(Promoted ${daysAgo}d ago)</span>` : '';
+                    return `<li class="list-item"><span>${String(player.name).replace(/</g, '&lt;')}</span><span class="badge badge-promote">1600+ x12</span>${sub}</li>`;
+                }).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
+            </ul>
+        `;
+    }
+
+    const lastPromotedEl = document.getElementById('lastPromotedCard');
+    const recentPromotionsEl = document.getElementById('recentPromotionsCard');
+    if (lastPromotedEl && promotionsData.lastPromoted && promotionsData.lastPromoted.name) {
+        const lp = promotionsData.lastPromoted;
+        lastPromotedEl.innerHTML = `
+            <h3>Last Promoted</h3>
+            <p class="last-promoted-name">${String(lp.name).replace(/</g, '&lt;')}</p>
+            <p class="last-promoted-role">${formatPromotionRole(lp.fromRole)} → ${formatPromotionRole(lp.toRole)}</p>
+            <p class="last-promoted-date">${formatPromotionDate(lp.promotedAt)}</p>
+        `;
+    } else if (lastPromotedEl) {
+        lastPromotedEl.innerHTML = '<h3>Last Promoted</h3><p class="muted">No promotions recorded yet.</p>';
+    }
+    if (recentPromotionsEl) {
+        const recent = (promotionsData.recent || []).slice(0, 8);
+        recentPromotionsEl.innerHTML = `
+            <h3>Recent Promotions</h3>
+            <ul class="list">
+                ${recent.length ? recent.map(p => `
+                    <li class="list-item"><span>${String(p.name).replace(/</g, '&lt;')}</span> <span class="badge badge-role">${formatPromotionRole(p.fromRole)} → ${formatPromotionRole(p.toRole)}</span> <span class="promotion-date">${formatPromotionDate(p.promotedAt)}</span></li>
+                `).join('') : '<li class="list-item muted">No promotions yet.</li>'}
             </ul>
         `;
     }

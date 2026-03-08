@@ -56,6 +56,18 @@ CREATE TABLE IF NOT EXISTS war_snapshots (
     FOREIGN KEY (war_week_id) REFERENCES war_weeks(id) ON DELETE CASCADE
 );
 
+-- Promotion history (Member -> Elder -> Co-Leader)
+CREATE TABLE IF NOT EXISTS promotion_history (
+    id SERIAL PRIMARY KEY,
+    member_tag TEXT NOT NULL,
+    from_role TEXT NOT NULL,
+    to_role TEXT NOT NULL,
+    promoted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (member_tag) REFERENCES members(tag) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_promotion_history_member ON promotion_history(member_tag);
+CREATE INDEX IF NOT EXISTS idx_promotion_history_at ON promotion_history(promoted_at DESC);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_war_weeks_end_date ON war_weeks(end_date DESC);
 CREATE INDEX IF NOT EXISTS idx_war_participants_week ON war_participants(war_week_id);
