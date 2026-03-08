@@ -109,6 +109,14 @@ document.addEventListener('DOMContentLoaded', () => {
             renderView();
         });
     }
+
+    // Summary (and War Table) player links: click → switch to War Table and focus row
+    document.body.addEventListener('click', (e) => {
+        const a = e.target.closest('a.player-link-summary');
+        if (!a) return;
+        e.preventDefault();
+        focusPlayerRow(a.getAttribute('data-tag') || '', a.getAttribute('data-name') || '');
+    });
 });
 
 // Schedule the next automatic refresh
@@ -958,11 +966,22 @@ function renderTable(data) {
         row.dataset.playerTag = player.tag || '';
         row.dataset.playerName = player.name || '';
 
-        // Player name
+        // Player name: link to RoyaleAPI (tag without #)
         const nameCell = document.createElement('td');
         nameCell.className = `name-cell ${player.joinedRecently ? 'name-recent' : ''} ${player.promotionReady ? 'promotion-ready' : ''}`.trim();
-        nameCell.textContent = player.name;
-        nameCell.title = player.tag || '';
+        const tagForUrl = (player.tag || '').replace(/^#/, '');
+        if (tagForUrl) {
+            const nameLink = document.createElement('a');
+            nameLink.href = `https://royaleapi.com/player/${tagForUrl}/`;
+            nameLink.target = '_blank';
+            nameLink.rel = 'noopener noreferrer';
+            nameLink.textContent = player.name || player.tag;
+            nameLink.title = player.tag || 'View on RoyaleAPI';
+            nameCell.appendChild(nameLink);
+        } else {
+            nameCell.textContent = player.name || '';
+        }
+        nameCell.title = nameCell.title || player.tag || '';
 
         if (player.joinedRecently) {
             const badge = document.createElement('span');
@@ -1584,12 +1603,14 @@ function renderDashboard() {
     const promotionsData = latestData.promotions || {};
     const recentPromotionsMap = new Map();
     const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const twelveWeeksAgo = Date.now() - 12 * 7 * 24 * 60 * 60 * 1000;
     (promotionsData.recent || []).forEach(p => {
         const at = new Date(p.promotedAt).getTime();
         if (at >= ninetyDaysAgo) recentPromotionsMap.set(p.tag, p);
     });
+    const promotedInLast12Weeks = new Set((promotionsData.recent || []).filter(p => new Date(p.promotedAt).getTime() >= twelveWeeksAgo).map(p => p.tag));
 
-    const promotionReadyPlayers = players.filter(player => player.promotionReady);
+    const promotionReadyPlayers = players.filter(player => player.promotionReady && !promotedInLast12Weeks.has(player.tag));
     const promotionList = [...promotionReadyPlayers]
         .sort((a, b) => {
             const aRecent = recentPromotionsMap.get(a.tag);
@@ -1602,13 +1623,15 @@ function renderDashboard() {
 
     if (promotionEl) {
         promotionEl.innerHTML = `
-            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks).">?</span></h3>
+            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks). Anyone promoted in the last 12 weeks needs another 12 weeks at 1600+ before being eligible again.">?</span></h3>
             <ul class="list">
                 ${promotionList.length ? promotionList.map(player => {
                     const recent = recentPromotionsMap.get(player.tag);
                     const daysAgo = recent ? Math.floor((Date.now() - new Date(recent.promotedAt).getTime()) / (24 * 60 * 60 * 1000)) : null;
                     const sub = daysAgo != null ? ` <span class="promotion-meta">(Promoted ${daysAgo}d ago)</span>` : '';
-                    return `<li class="list-item"><span>${String(player.name).replace(/</g, '&lt;')}</span><span class="badge badge-promote">1600+ x12</span>${sub}</li>`;
+                    const safeName = String(player.name || '').replace(/</g, '&lt;');
+                    const link = player.tag ? `<a href="#" class="player-link-summary" data-tag="${String(player.tag).replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
+                    return `<li class="list-item">${link}<span class="badge badge-promote">1600+ x12</span>${sub}</li>`;
                 }).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
             </ul>
         `;
@@ -1620,9 +1643,12 @@ function renderDashboard() {
         recentPromotionsEl.innerHTML = `
             <h3>Recent Promotions</h3>
             <ul class="list">
-                ${recent.length ? recent.map(p => `
-                    <li class="list-item"><span>${String(p.name).replace(/</g, '&lt;')}</span> <span class="badge badge-role">${formatPromotionRole(p.fromRole)} → ${formatPromotionRole(p.toRole)}</span> <span class="promotion-date">${formatPromotionDate(p.promotedAt)}</span></li>
-                `).join('') : '<li class="list-item muted">No promotions yet.</li>'}
+                ${recent.length ? recent.map(p => {
+                    const safeName = String(p.name || p.tag || '').replace(/</g, '&lt;');
+                    const tag = (p.tag || '').replace(/^#/, '');
+                    const link = tag ? `<a href="#" class="player-link-summary" data-tag="${String(p.tag || '').replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
+                    return `<li class="list-item">${link} <span class="badge badge-role">${formatPromotionRole(p.fromRole)} → ${formatPromotionRole(p.toRole)}</span> <span class="promotion-date">${formatPromotionDate(p.promotedAt)}</span></li>`;
+                }).join('') : '<li class="list-item muted">No promotions yet.</li>'}
             </ul>
         `;
     }
@@ -1633,9 +1659,12 @@ function renderDashboard() {
         recentDemotionsEl.innerHTML = `
             <h3>Recent Demotions</h3>
             <ul class="list">
-                ${recentD.length ? recentD.map(d => `
-                    <li class="list-item"><span>${String(d.name).replace(/</g, '&lt;')}</span> <span class="badge badge-demotion">${formatPromotionRole(d.fromRole)} → ${formatPromotionRole(d.toRole)}</span> <span class="promotion-date">${formatPromotionDate(d.demotedAt)}</span></li>
-                `).join('') : '<li class="list-item muted">No demotions yet.</li>'}
+                ${recentD.length ? recentD.map(d => {
+                    const safeName = String(d.name || d.tag || '').replace(/</g, '&lt;');
+                    const tag = (d.tag || '').replace(/^#/, '');
+                    const link = tag ? `<a href="#" class="player-link-summary" data-tag="${String(d.tag || '').replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
+                    return `<li class="list-item">${link} <span class="badge badge-demotion">${formatPromotionRole(d.fromRole)} → ${formatPromotionRole(d.toRole)}</span> <span class="promotion-date">${formatPromotionDate(d.demotedAt)}</span></li>`;
+                }).join('') : '<li class="list-item muted">No demotions yet.</li>'}
             </ul>
         `;
     }
@@ -1662,48 +1691,45 @@ function renderDashboard() {
             .map(player => ({
                 name: player.name,
                 role: player.role,
+                tag: player.tag,
                 score: player.scores[demotionColumn.label]
             }));
         
         demotionList.push(...membersElders);
         
-        // Co-leaders: check for 0 points for 12 consecutive weeks
-        const coLeaders = players
-            .filter(player => {
-                // Only include current members
-                if (!player.isCurrent) return false;
-                const role = (player.role || '').toLowerCase();
-                if (role !== 'coleader') return false;
-                
-                // Check last 12 weeks for consecutive 0s
-                const streakColumns = allColumns.slice(0, 12);
-                if (streakColumns.length < 12) return false;
-                
-                let consecutiveZeros = 0;
-                for (const column of streakColumns) {
-                    const score = player.scores[column.label];
-                    if (score === null || score === undefined) {
-                        consecutiveZeros = 0; // N/A breaks the streak
-                        break;
-                    }
-                    if (score === 0) {
-                        consecutiveZeros++;
-                    } else {
-                        consecutiveZeros = 0; // Non-zero breaks the streak
-                        break;
-                    }
+        // Co-leaders: (1) 0 points for 12 consecutive weeks, or (2) 12-week rolling average below 1600
+        const coLeaderCandidates = players.filter(p => p.isCurrent && (p.role || '').toLowerCase() === 'coleader');
+        const streakColumns = allColumns.slice(0, 12);
+        for (const player of coLeaderCandidates) {
+            if (streakColumns.length < 12) continue;
+            let consecutiveZeros = 0;
+            const scoresForAvg = [];
+            for (const column of streakColumns) {
+                const score = player.scores[column.label];
+                if (score === null || score === undefined) {
+                    consecutiveZeros = 0;
+                    break;
                 }
-                
-                return consecutiveZeros >= 12;
-            })
-            .map(player => ({
-                name: player.name,
-                role: player.role,
-                score: 0, // Show 0 for co-leaders
-                weeks: 12
-            }));
-        
-        demotionList.push(...coLeaders);
+                if (score === 0) {
+                    consecutiveZeros++;
+                } else {
+                    consecutiveZeros = 0;
+                    break;
+                }
+            }
+            if (consecutiveZeros >= 12) {
+                demotionList.push({ name: player.name, role: player.role, tag: player.tag, score: 0, weeks: 12, reason: '0 pts x12' });
+                continue;
+            }
+            for (const column of streakColumns) {
+                const score = player.scores[column.label];
+                if (score !== null && score !== undefined) scoresForAvg.push(score);
+            }
+            const avg = scoresForAvg.length ? scoresForAvg.reduce((a, b) => a + b, 0) / scoresForAvg.length : 0;
+            if (scoresForAvg.length >= 1 && avg < WAR_REQUIREMENT) {
+                demotionList.push({ name: player.name, role: player.role, tag: player.tag, score: Math.round(avg), weeks: scoresForAvg.length, reason: '12-wk avg < 1600' });
+            }
+        }
     }
     
     // Limit to 8 for display
@@ -1761,13 +1787,15 @@ function renderDashboard() {
             demotionMessage = '<li class="list-item">No one flagged for demotion watch.</li>';
         } else {
             demotionMessage = limitedDemotionList.map(player => {
-                const badgeText = player.weeks ? `0 pts x${player.weeks}` : `${player.score} pts`;
-                return `<li class="list-item"><span>${player.name}</span><span class="badge badge-demote">${badgeText}</span></li>`;
+                const badgeText = player.reason === '12-wk avg < 1600' ? `12-wk avg ${player.score}` : (player.weeks ? `0 pts x${player.weeks}` : `${player.score} pts`);
+                const safeName = String(player.name || '').replace(/</g, '&lt;');
+                const link = player.tag ? `<a href="#" class="player-link-summary" data-tag="${String(player.tag).replace(/"/g, '&quot;')}" data-name="${safeName.replace(/"/g, '&quot;')}">${safeName}</a>` : safeName;
+                return `<li class="list-item">${link}<span class="badge badge-demote">${badgeText}</span></li>`;
             }).join('');
         }
         
         demotionEl.innerHTML = `
-            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week, or co-leaders with 0 for 12 straight weeks.">?</span></h3>
+            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week. Co-leaders: 0 for 12 straight weeks, or 12-week rolling average below 1600.">?</span></h3>
             <ul class="list">
                 ${demotionMessage}
             </ul>
