@@ -77,15 +77,6 @@ h1 {
     word-break: break-word;
 }
 
-.header-link {
-    color: #2c54c7;
-    text-decoration: none;
-    font-weight: 500;
-}
-.header-link:hover {
-    text-decoration: underline;
-}
-
 .brand {
     display: flex;
     align-items: center;
@@ -550,6 +541,13 @@ td:not(:first-child) {
     background: #243b8f;
     color: #ffffff;
     border-color: #243b8f;
+}
+
+.menu-tab-link {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
 }
 
 .tab-panel {
