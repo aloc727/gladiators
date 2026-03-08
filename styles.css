@@ -183,6 +183,17 @@ th.sortable {
     max-width: 200px;
 }
 
+/* Week columns: room for "Season X Week Y" + date range on two lines, no overlap */
+th.sortable.week-header {
+    white-space: pre-line;
+    line-height: 1.45;
+    min-height: 3.8em;
+    padding: 10px 8px 14px;
+    min-width: 130px;
+    max-width: none;
+    vertical-align: bottom;
+}
+
 th.sortable:hover {
     background: rgba(255, 255, 255, 0.1);
 }

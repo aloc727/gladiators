@@ -25,7 +25,7 @@ const MAX_WEEKS_DISPLAY = 1000; // Temporarily increased for debugging
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.18.0';
+const UI_VERSION = 'v1.19.0';
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -927,11 +927,12 @@ function renderTable(data) {
     rankHeader.addEventListener('click', () => sortTable('rank', rankHeader));
     headerRow.appendChild(rankHeader);
 
-    // Date columns (show displayLabel; ID/troubleshooting info on mouseover)
+    // Date columns (show displayLabel; ID on mouseover; line break before date range to avoid overlap)
     columns.forEach(column => {
         const weekHeader = document.createElement('th');
-        weekHeader.className = 'sortable';
-        weekHeader.textContent = column.displayLabel ?? column.label;
+        weekHeader.className = 'sortable week-header';
+        const label = column.displayLabel ?? column.label;
+        weekHeader.textContent = label.includes(' (') ? label.replace(' (', '\n(') : label;
         if (column.tooltip) weekHeader.title = column.tooltip;
         weekHeader.setAttribute('data-column', column.label);
         weekHeader.addEventListener('click', () => sortTable(column.label, weekHeader));
