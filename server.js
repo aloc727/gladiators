@@ -590,28 +590,34 @@ function getDemoWarLog() {
     return weeks.reverse();
 }
 
-// Convert current river race data to war log format (uses Central Time for week boundaries)
+/**
+ * Current river race API (GET /v1/clans/%23{tag}/currentriverrace) returns:
+ *   seasonId   – current season number (e.g. 129)
+ *   sectionIndex – usually 0
+ *   periodIndex  – current week within season (1–5)
+ * We use these as the source of truth for "what season and week is it?"
+ */
 function convertRiverRaceToWarLog(riverRaceData) {
     if (!riverRaceData || !riverRaceData.clan || !riverRaceData.clan.participants) {
         return [];
     }
-    
+
     const endDateISO = getCurrentWarEndKey();
     const endDate = new Date(endDateISO);
     const startThursday = new Date(endDate);
     startThursday.setUTCDate(endDate.getUTCDate() - 4);
-    
+
     const participants = riverRaceData.clan.participants;
-    
+
     return [{
-        participants: participants,
+        participants,
         createdDate: endDateISO,
         startDate: startThursday.toISOString(),
         endDate: endDateISO,
         state: riverRaceData.state || 'unknown',
-        seasonId: riverRaceData.seasonId,
-        sectionIndex: riverRaceData.sectionIndex,
-        periodIndex: riverRaceData.periodIndex
+        seasonId: riverRaceData.seasonId ?? null,
+        sectionIndex: riverRaceData.sectionIndex ?? 0,
+        periodIndex: riverRaceData.periodIndex ?? null
     }];
 }
 

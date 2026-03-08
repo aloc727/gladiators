@@ -632,24 +632,28 @@ function processWarData(members, warLog) {
 
     const columns = dateMergedWars.map((war, index) => {
         const seasonWeek = getSeasonWeekLabel(war);
-        // Use startDate from war if available, otherwise calculate it
         const range = formatWarRange(war.endDateObj, war.startDate);
-        
-        // TEMPORARY: Add war ID and season info to label for debugging
         const seasonInfo = war.seasonId ? ` S${war.seasonId}` : '';
         const periodInfo = war.periodIndex !== null && war.periodIndex !== undefined ? `W${war.periodIndex}` : '';
         const seasonPeriodLabel = seasonInfo && periodInfo ? `${seasonInfo}${periodInfo}` : seasonInfo || '';
-        const warIdLabel = war.id ? ` [ID:${war.id}${seasonPeriodLabel ? `, ${seasonPeriodLabel}` : ''}]` : (seasonPeriodLabel ? ` [${seasonPeriodLabel}]` : '');
-        
+        const debugTooltip = war.id ? `ID:${war.id}${seasonPeriodLabel ? `, ${seasonPeriodLabel}` : ''}` : (seasonPeriodLabel || '');
+
+        let displayLabel;
         if (index === 0) {
-            // Current week
-            const currentLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
-            return { label: currentLabel + warIdLabel, endDate: war.endDateObj, baseLabel: currentLabel, war: war };
+            displayLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
+        } else {
+            displayLabel = seasonWeek ? `${seasonWeek} (${range})` : range;
         }
-        
-        // Historical weeks - always show season/week and date range
-        const historicalLabel = seasonWeek ? `${seasonWeek} (${range})` : range;
-        return { label: historicalLabel + warIdLabel, endDate: war.endDateObj, baseLabel: historicalLabel, war: war };
+        const label = displayLabel + (debugTooltip ? ` [${debugTooltip}]` : '');
+
+        return {
+            label,
+            displayLabel,
+            tooltip: debugTooltip || null,
+            endDate: war.endDateObj,
+            baseLabel: displayLabel,
+            war
+        };
     });
 
     const labelRangeRegex = /(\d{1,2}\/\d{1,2}\/\d{4})/g;
@@ -674,6 +678,7 @@ function processWarData(members, warLog) {
 
     if (columns.length && CURRENT_WAR_LABEL) {
         columns[0].label = CURRENT_WAR_LABEL;
+        columns[0].displayLabel = CURRENT_WAR_LABEL;
     }
 
     // Initialize all players with 0 for each date column
@@ -922,11 +927,12 @@ function renderTable(data) {
     rankHeader.addEventListener('click', () => sortTable('rank', rankHeader));
     headerRow.appendChild(rankHeader);
 
-    // Date columns
+    // Date columns (show displayLabel; ID/troubleshooting info on mouseover)
     columns.forEach(column => {
         const weekHeader = document.createElement('th');
         weekHeader.className = 'sortable';
-        weekHeader.textContent = column.label;
+        weekHeader.textContent = column.displayLabel ?? column.label;
+        if (column.tooltip) weekHeader.title = column.tooltip;
         weekHeader.setAttribute('data-column', column.label);
         weekHeader.addEventListener('click', () => sortTable(column.label, weekHeader));
         headerRow.appendChild(weekHeader);
