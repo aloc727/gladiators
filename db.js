@@ -8,12 +8,18 @@ const fs = require('fs');
 const path = require('path');
 
 // Load database connection from environment variables
+// Ensure password is always a string (pg rejects non-strings and can break if env is wrong type)
+function getDbPassword() {
+    const p = process.env.DB_PASSWORD;
+    if (p === undefined || p === null) return '';
+    return String(p);
+}
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
+    port: parseInt(process.env.DB_PORT, 10) || 5432,
     database: process.env.DB_NAME || 'gladiators',
     user: process.env.DB_USER || 'gladiators_user',
-    password: process.env.DB_PASSWORD || '',
+    password: getDbPassword(),
     // Connection pool settings
     max: 20, // Maximum number of clients in the pool
     idleTimeoutMillis: 30000,
@@ -347,6 +353,12 @@ function isPromotion(fromRole, toRole) {
     return to > from && from >= 1 && to <= 4;
 }
 
+function isDemotion(fromRole, toRole) {
+    const from = ROLE_RANK[(fromRole || '').toLowerCase()] || 0;
+    const to = ROLE_RANK[(toRole || '').toLowerCase()] || 0;
+    return from > to && from >= 1 && to >= 1;
+}
+
 async function recordPromotion(memberTag, fromRole, toRole) {
     if (!memberTag || !fromRole || !toRole || !isPromotion(fromRole, toRole)) return null;
     const result = await pool.query(
@@ -386,6 +398,37 @@ async function getPromotionsByMember(tag) {
     if (result.rows.length === 0) return null;
     const r = result.rows[0];
     return { fromRole: r.from_role, toRole: r.to_role, promotedAt: r.promoted_at };
+}
+
+async function recordDemotion(memberTag, fromRole, toRole) {
+    if (!memberTag || !fromRole || !toRole || !isDemotion(fromRole, toRole)) return null;
+    const result = await pool.query(
+        `INSERT INTO demotion_history (member_tag, from_role, to_role)
+         VALUES ($1, $2, $3) RETURNING *`,
+        [memberTag, (fromRole || '').toLowerCase(), (toRole || '').toLowerCase()]
+    );
+    return result.rows[0] ? { id: result.rows[0].id, memberTag, fromRole, toRole, demotedAt: result.rows[0].demoted_at } : null;
+}
+
+async function getLastDemotion() {
+    const result = await pool.query(
+        `SELECT dh.*, m.name FROM demotion_history dh
+         LEFT JOIN members m ON m.tag = dh.member_tag
+         ORDER BY dh.demoted_at DESC LIMIT 1`
+    );
+    if (result.rows.length === 0) return null;
+    const r = result.rows[0];
+    return { tag: r.member_tag, name: r.name || r.member_tag, fromRole: r.from_role, toRole: r.to_role, demotedAt: r.demoted_at };
+}
+
+async function getRecentDemotions(limit = 10) {
+    const result = await pool.query(
+        `SELECT dh.*, m.name FROM demotion_history dh
+         LEFT JOIN members m ON m.tag = dh.member_tag
+         ORDER BY dh.demoted_at DESC LIMIT $1`,
+        [limit]
+    );
+    return result.rows.map(r => ({ tag: r.member_tag, name: r.name || r.member_tag, fromRole: r.from_role, toRole: r.to_role, demotedAt: r.demoted_at }));
 }
 
 /**
@@ -468,6 +511,11 @@ module.exports = {
     getLastPromotion,
     getRecentPromotions,
     getPromotionsByMember,
+    // Demotions
+    isDemotion,
+    recordDemotion,
+    getLastDemotion,
+    getRecentDemotions,
     
     // Utility
     initializeSchema,

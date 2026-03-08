@@ -1,5 +1,83 @@
 # Deployment Guide - Making Your Site Public
 
+## Restarting the app (systemd)
+
+```bash
+sudo systemctl restart gladiators
+```
+
+## Database password (systemd / env)
+
+The app reads `DB_PASSWORD` from the environment. **systemd does not load `.env` files.** To pass the password, use one of the options below.
+
+### Option A – EnvironmentFile (recommended), literal steps
+
+Do these on the server (e.g. SSH into your Ubuntu box). Replace `YOUR_DB_PASSWORD` with your real Postgres password everywhere; do not add quotes around it.
+
+**Step 1 – Create the directory**
+```bash
+sudo mkdir -p /etc/gladiators
+```
+
+**Step 2 – Create the env file (put your real password after the `=`)**
+```bash
+echo 'DB_PASSWORD=YOUR_DB_PASSWORD' | sudo tee /etc/gladiators/env
+```
+Example: if your password is `abc123`, you type:  
+`echo 'DB_PASSWORD=abc123' | sudo tee /etc/gladiators/env`
+
+**Step 3 – Lock down the file**
+```bash
+sudo chmod 600 /etc/gladiators/env
+```
+
+**Step 4 – Open the systemd service file for editing**
+```bash
+sudo systemctl edit --full gladiators
+```
+If that opens a blank or wrong file, try:
+```bash
+sudo nano /etc/systemd/system/gladiators.service
+```
+(or use `sudo vi` if you use vi.)
+
+**Step 5 – Add one line in the `[Service]` block**  
+Find the line that says `[Service]`. Below it (or with the other Environment lines), add exactly this line on its own line:
+```ini
+EnvironmentFile=/etc/gladiators/env
+```
+Save and exit (in nano: Ctrl+O, Enter, then Ctrl+X; in vi: Esc, then `:wq`, Enter).
+
+**Step 6 – Reload systemd and restart the app**
+```bash
+sudo systemctl daemon-reload
+```
+```bash
+sudo systemctl restart gladiators
+```
+
+**Step 7 – Confirm it’s running and can connect to the DB**
+```bash
+sudo systemctl status gladiators
+```
+You should see `active (running)`. Then check the logs:
+```bash
+journalctl -u gladiators -n 30 --no-pager
+```
+You should see “Connected to PostgreSQL” and no “client password must be a string” (or similar) errors.
+
+### Option B – Inline in service
+
+In the service file, add:
+   ```ini
+   Environment=DB_PASSWORD=your_actual_password_here
+   ```
+   (Less ideal if the file is world-readable.)
+
+Ensure the value is a plain string (no extra quotes in the env file). The app coerces `DB_PASSWORD` to a string so pg always receives a string.
+
+**If you run schema by hand** (e.g. when the app can't connect): run the SQL in `db/schema-postgres.sql` for `promotion_history` and `demotion_history`, or use `scripts/apply-demotion-history.sql` for demotions only. To backfill a promotion (e.g. Peyton Milkner): run `scripts/record-peyton-promotion.sql` (or the INSERT from it) in your Postgres client.
+
 ## IP Address Restrictions & API Keys
 
 ### How It Works

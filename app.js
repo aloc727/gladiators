@@ -201,8 +201,13 @@ async function loadData() {
         // Fetch promotion history (for summary and promotion-ready box)
         const promotions = await fetch(`${API_BASE_URL}/api/clan/promotions`)
             .then(r => r.json())
-            .then(d => ({ lastPromoted: d.lastPromoted || null, recent: d.recent || [] }))
-            .catch(() => ({ lastPromoted: null, recent: [] }));
+            .then(d => ({
+                lastPromoted: d.lastPromoted || null,
+                recent: d.recent || [],
+                lastDemoted: d.lastDemoted || null,
+                recentDemotions: d.recentDemotions || []
+            }))
+            .catch(() => ({ lastPromoted: null, recent: [], lastDemoted: null, recentDemotions: [] }));
 
         // Process data
         const processedData = processWarData(members, warLog);
@@ -1313,11 +1318,19 @@ function formatPromotionRole(role) {
     return (role || '').charAt(0).toUpperCase() + (role || '').slice(1).toLowerCase();
 }
 
-function formatPromotionDate(isoString) {
+/** Format date as M/D/YY (e.g. 3/5/26) for home/summary dates */
+function formatShortDate(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const y = String(d.getFullYear()).slice(-2);
+    return `${m}/${day}/${y}`;
+}
+
+function formatPromotionDate(isoString) {
+    return formatShortDate(isoString);
 }
 
 function renderHighlights(data) {
@@ -1360,6 +1373,18 @@ function renderHighlights(data) {
         <div class="highlight-card highlight-card-promotion">
             <h4>Last Promoted</h4>
             <p><strong>${String(lastPromoted.name).replace(/</g, '&lt;')}</strong><br>${from} → ${to}${dateStr ? `<br><span class="highlight-date">${dateStr}</span>` : ''}</p>
+        </div>
+        `;
+    }
+    const lastDemoted = promotions.lastDemoted;
+    if (lastDemoted && lastDemoted.name) {
+        const from = formatPromotionRole(lastDemoted.fromRole);
+        const to = formatPromotionRole(lastDemoted.toRole);
+        const dateStr = formatPromotionDate(lastDemoted.demotedAt);
+        cards += `
+        <div class="highlight-card highlight-card-demotion">
+            <h4>Last Demoted</h4>
+            <p><strong>${String(lastDemoted.name).replace(/</g, '&lt;')}</strong><br>${from} → ${to}${dateStr ? `<br><span class="highlight-date">${dateStr}</span>` : ''}</p>
         </div>
         `;
     }
@@ -1604,7 +1629,7 @@ function renderDashboard() {
 
     if (promotionEl) {
         promotionEl.innerHTML = `
-            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks). Recently promoted (90 days) shown at bottom.">?</span></h3>
+            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks).">?</span></h3>
             <ul class="list">
                 ${promotionList.length ? promotionList.map(player => {
                     const recent = recentPromotionsMap.get(player.tag);
@@ -1616,19 +1641,7 @@ function renderDashboard() {
         `;
     }
 
-    const lastPromotedEl = document.getElementById('lastPromotedCard');
     const recentPromotionsEl = document.getElementById('recentPromotionsCard');
-    if (lastPromotedEl && promotionsData.lastPromoted && promotionsData.lastPromoted.name) {
-        const lp = promotionsData.lastPromoted;
-        lastPromotedEl.innerHTML = `
-            <h3>Last Promoted</h3>
-            <p class="last-promoted-name">${String(lp.name).replace(/</g, '&lt;')}</p>
-            <p class="last-promoted-role">${formatPromotionRole(lp.fromRole)} → ${formatPromotionRole(lp.toRole)}</p>
-            <p class="last-promoted-date">${formatPromotionDate(lp.promotedAt)}</p>
-        `;
-    } else if (lastPromotedEl) {
-        lastPromotedEl.innerHTML = '<h3>Last Promoted</h3><p class="muted">No promotions recorded yet.</p>';
-    }
     if (recentPromotionsEl) {
         const recent = (promotionsData.recent || []).slice(0, 8);
         recentPromotionsEl.innerHTML = `
@@ -1637,6 +1650,31 @@ function renderDashboard() {
                 ${recent.length ? recent.map(p => `
                     <li class="list-item"><span>${String(p.name).replace(/</g, '&lt;')}</span> <span class="badge badge-role">${formatPromotionRole(p.fromRole)} → ${formatPromotionRole(p.toRole)}</span> <span class="promotion-date">${formatPromotionDate(p.promotedAt)}</span></li>
                 `).join('') : '<li class="list-item muted">No promotions yet.</li>'}
+            </ul>
+        `;
+    }
+
+    const lastDemotedEl = document.getElementById('lastDemotedCard');
+    const recentDemotionsEl = document.getElementById('recentDemotionsCard');
+    if (lastDemotedEl && promotionsData.lastDemoted && promotionsData.lastDemoted.name) {
+        const ld = promotionsData.lastDemoted;
+        lastDemotedEl.innerHTML = `
+            <h3>Last Demoted</h3>
+            <p class="last-promoted-name">${String(ld.name).replace(/</g, '&lt;')}</p>
+            <p class="last-promoted-role">${formatPromotionRole(ld.fromRole)} → ${formatPromotionRole(ld.toRole)}</p>
+            <p class="last-promoted-date">${formatPromotionDate(ld.demotedAt)}</p>
+        `;
+    } else if (lastDemotedEl) {
+        lastDemotedEl.innerHTML = '<h3>Last Demoted</h3><p class="muted">No demotions recorded yet.</p>';
+    }
+    if (recentDemotionsEl) {
+        const recentD = (promotionsData.recentDemotions || []).slice(0, 8);
+        recentDemotionsEl.innerHTML = `
+            <h3>Recent Demotions</h3>
+            <ul class="list">
+                ${recentD.length ? recentD.map(d => `
+                    <li class="list-item"><span>${String(d.name).replace(/</g, '&lt;')}</span> <span class="badge badge-demotion">${formatPromotionRole(d.fromRole)} → ${formatPromotionRole(d.toRole)}</span> <span class="promotion-date">${formatPromotionDate(d.demotedAt)}</span></li>
+                `).join('') : '<li class="list-item muted">No demotions yet.</li>'}
             </ul>
         `;
     }
@@ -1805,25 +1843,13 @@ function renderDashboard() {
     }
 }
 
-// Update the "Updated as of" timestamp
+// Update the "Updated as of" timestamp (date as M/D/YY, e.g. 3/5/26, in CT)
 function updateTimestamp() {
     const lastUpdatedElement = document.getElementById('lastUpdated');
     if (lastUpdatedElement) {
         const now = new Date();
-        
-        // Format: "Updated as of: MM/DD/YYYY, HH:MM:SS AM/PM"
-        const options = {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true,
-            timeZone: 'America/Chicago' // Central Time
-        };
-        
-        const formattedDate = now.toLocaleString('en-US', options);
-        lastUpdatedElement.textContent = `Updated as of: ${formattedDate} CT`;
+        const dateStr = now.toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'numeric', day: 'numeric', year: '2-digit' });
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Chicago' });
+        lastUpdatedElement.innerHTML = `Updated as of: <span class="text-date">${dateStr}, ${timeStr} CT</span>`;
     }
 }

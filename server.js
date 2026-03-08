@@ -332,6 +332,13 @@ async function attachMemberHistory(memberList) {
                     console.warn('Failed to record promotion:', e.message);
                 }
             }
+            if (previousRole && db.isDemotion(previousRole, member.role)) {
+                try {
+                    await db.recordDemotion(member.tag, previousRole, member.role);
+                } catch (e) {
+                    console.warn('Failed to record demotion:', e.message);
+                }
+            }
 
             enriched.push({ ...member, firstSeen, joinedAt, tenureKnown, isCurrent: true });
         }
@@ -972,14 +979,24 @@ const server = http.createServer((req, res) => {
     }
     
     if (pathname === '/api/clan/promotions') {
-        Promise.all([db.getLastPromotion(), db.getRecentPromotions(10)])
-            .then(([lastPromoted, recent]) => {
+        Promise.all([
+            db.getLastPromotion(),
+            db.getRecentPromotions(10),
+            db.getLastDemotion(),
+            db.getRecentDemotions(10)
+        ])
+            .then(([lastPromoted, recent, lastDemoted, recentDemotions]) => {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ lastPromoted, recent: recent || [] }));
+                res.end(JSON.stringify({
+                    lastPromoted,
+                    recent: recent || [],
+                    lastDemoted: lastDemoted || null,
+                    recentDemotions: recentDemotions || []
+                }));
             })
             .catch(() => {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ lastPromoted: null, recent: [] }));
+                res.end(JSON.stringify({ lastPromoted: null, recent: [], lastDemoted: null, recentDemotions: [] }));
             });
         return;
     }

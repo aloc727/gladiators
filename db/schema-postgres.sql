@@ -68,6 +68,18 @@ CREATE TABLE IF NOT EXISTS promotion_history (
 CREATE INDEX IF NOT EXISTS idx_promotion_history_member ON promotion_history(member_tag);
 CREATE INDEX IF NOT EXISTS idx_promotion_history_at ON promotion_history(promoted_at DESC);
 
+-- Demotion history (Leader -> Co-Leader -> Elder -> Member)
+CREATE TABLE IF NOT EXISTS demotion_history (
+    id SERIAL PRIMARY KEY,
+    member_tag TEXT NOT NULL,
+    from_role TEXT NOT NULL,
+    to_role TEXT NOT NULL,
+    demoted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (member_tag) REFERENCES members(tag) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_demotion_history_member ON demotion_history(member_tag);
+CREATE INDEX IF NOT EXISTS idx_demotion_history_at ON demotion_history(demoted_at DESC);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_war_weeks_end_date ON war_weeks(end_date DESC);
 CREATE INDEX IF NOT EXISTS idx_war_participants_week ON war_participants(war_week_id);
