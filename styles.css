@@ -1164,3 +1164,53 @@ td:not(:first-child) {
         grid-template-columns: 1fr;
     }
 }
+
+/* Cookie consent banner */
+.cookie-consent {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 14px 20px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
+}
+.cookie-consent p {
+    margin: 0;
+    font-size: 0.9rem;
+    max-width: 560px;
+}
+.cookie-consent-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.cookie-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+.cookie-btn-accept {
+    background: #2c54c7;
+    color: #fff;
+}
+.cookie-btn-accept:hover {
+    background: #2343a0;
+}
+.cookie-btn-reject {
+    background: #475569;
+    color: #e2e8f0;
+}
+.cookie-btn-reject:hover {
+    background: #64748b;
+}

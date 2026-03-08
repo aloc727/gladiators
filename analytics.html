@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #0b1a36; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+        .box { background: #1e293b; padding: 2rem; border-radius: 12px; max-width: 420px; width: 100%; }
+        h1 { margin: 0 0 1rem; font-size: 1.25rem; }
+        input { width: 100%; padding: 10px 12px; border: 1px solid #475569; border-radius: 6px; background: #0f172a; color: #e2e8f0; font-size: 1rem; box-sizing: border-box; }
+        button { margin-top: 12px; padding: 10px 16px; background: #2c54c7; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; width: 100%; }
+        button:hover { background: #2343a0; }
+        .error { color: #f87171; font-size: 0.9rem; margin-top: 8px; }
+        .dashboard { display: none; }
+        .dashboard a { color: #7dd3fc; }
+        .dashboard ul { margin: 1rem 0; padding-left: 1.25rem; }
+    </style>
+</head>
+<body>
+    <div class="box" id="loginBox">
+        <h1>Analytics</h1>
+        <p style="margin: 0 0 1rem; color: #94a3b8; font-size: 0.9rem;">Enter the analytics password to view the dashboard.</p>
+        <input type="password" id="analyticsPassword" placeholder="Password" autocomplete="off" aria-label="Analytics password">
+        <button type="button" id="analyticsSubmit">Continue</button>
+        <p class="error" id="analyticsError" role="alert"></p>
+    </div>
+    <div class="box dashboard" id="dashboardBox">
+        <h1>Analytics dashboard</h1>
+        <p>Visitor and usage data are in Google Analytics. Use the link below (after you’ve set up GA4 and added your Measurement ID to the site).</p>
+        <ul>
+            <li><a href="https://analytics.google.com/" target="_blank" rel="noopener noreferrer">Open Google Analytics</a></li>
+        </ul>
+        <p style="color: #94a3b8; font-size: 0.85rem;">In GA you can see: traffic, location, device, pages, and events. Add <code>GA_MEASUREMENT_ID</code> in <code>app.js</code> and ensure users accept cookies for tracking to work.</p>
+    </div>
+    <script>
+        (function () {
+            // Change this to your own password (client-side only – for keeping casual visitors out).
+            var EXPECTED_PASSWORD = 'gladiators-analytics';
+            var loginBox = document.getElementById('loginBox');
+            var dashboardBox = document.getElementById('dashboardBox');
+            var input = document.getElementById('analyticsPassword');
+            var submit = document.getElementById('analyticsSubmit');
+            var errEl = document.getElementById('analyticsError');
+            var sessionKey = 'gladiators_analytics_ok';
+            if (sessionStorage.getItem(sessionKey)) {
+                loginBox.style.display = 'none';
+                dashboardBox.style.display = 'block';
+                return;
+            }
+            function showDashboard() {
+                sessionStorage.setItem(sessionKey, '1');
+                loginBox.style.display = 'none';
+                dashboardBox.style.display = 'block';
+            }
+            submit.addEventListener('click', function () {
+                errEl.textContent = '';
+                if (input.value === EXPECTED_PASSWORD) {
+                    showDashboard();
+                } else {
+                    errEl.textContent = 'Incorrect password.';
+                }
+            });
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') submit.click();
+            });
+        })();
+    </script>
+</body>
+</html>

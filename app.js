@@ -2,6 +2,10 @@
 const CLAN_TAG = '2CPPJLJ';
 const API_BASE_URL = window.location.origin; // Use same origin as the page
 
+// Google Analytics 4: tag is in index.html head (G-VLWQNRVDKG). Consent banner controls when tracking runs.
+const GA_MEASUREMENT_ID = 'G-VLWQNRVDKG';
+const COOKIE_CONSENT_KEY = 'gladiators_cookie_consent';
+
 // Auto-refresh configuration
 // Clash Royale API rate limits: ~100 requests per 10 seconds per IP
 // We'll refresh every 5 minutes to be safe and respectful
@@ -23,6 +27,28 @@ const WAR_REQUIREMENT = 1600;
 const WARNING_THRESHOLD = 800;
 const RECENT_JOIN_DAYS = 7;
 const MAX_WEEKS_DISPLAY = 1000; // Temporarily increased for debugging
+
+/** Cookie consent: show banner if no choice; grant GA when user accepts (tag is already in head). */
+function initCookieConsent() {
+    const consent = localStorage.getItem(COOKIE_CONSENT_KEY);
+    const banner = document.getElementById('cookieConsent');
+    if (!banner) return;
+    if (consent === 'accepted' && window.gtag) {
+        window.gtag('consent', 'update', { analytics_storage: 'granted' });
+        return;
+    }
+    if (consent === 'rejected') return;
+    banner.style.display = 'block';
+    document.getElementById('cookieAccept')?.addEventListener('click', () => {
+        localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
+        banner.style.display = 'none';
+        if (window.gtag) window.gtag('consent', 'update', { analytics_storage: 'granted' });
+    });
+    document.getElementById('cookieReject')?.addEventListener('click', () => {
+        localStorage.setItem(COOKIE_CONSENT_KEY, 'rejected');
+        banner.style.display = 'none';
+    });
+}
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
@@ -95,6 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('popstate', () => {
         applyRoute(window.location.pathname);
     });
+
+    // Cookie consent and analytics: show banner if no choice yet; load GA only if user accepted
+    initCookieConsent();
 
     // Range switching
     document.querySelectorAll('.range-tab').forEach(button => {
