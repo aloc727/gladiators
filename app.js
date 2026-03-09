@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.31.0';
+const UI_VERSION = 'v1.32.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -437,15 +437,27 @@ async function loadData() {
                 .catch(() => null)
         ]);
 
-        // Use API response as "current week" only when it's actually a new week (not last week again – API sometimes returns last week's race after rollover)
+        // Use API response as "current week" only when it's actually the new week (not last week – API can return last week's race after rollover or in wrong order)
         let currentWar = null;
         if (currentWarRaw && currentWarRaw.participants && currentWarRaw.participants.length) {
-            const sameAsLastWeek = historicalWars.length > 0 &&
-                currentWarRaw.seasonId != null && currentWarRaw.periodIndex != null &&
-                currentWarRaw.seasonId === historicalWars[0].seasonId &&
-                currentWarRaw.periodIndex === historicalWars[0].periodIndex;
+            // Compare to the actual most recent historical war by end date (API/server order may vary)
+            const sortedHistorical = [...historicalWars].sort((a, b) =>
+                (new Date(b.endDate || b.createdDate || 0)) - (new Date(a.endDate || a.createdDate || 0))
+            );
+            const lastWeekWar = sortedHistorical[0];
+            const sameAsLastWeek = lastWeekWar && currentWarRaw.seasonId != null && currentWarRaw.periodIndex != null &&
+                currentWarRaw.seasonId === lastWeekWar.seasonId &&
+                currentWarRaw.periodIndex === lastWeekWar.periodIndex;
+
+            // Reject if API war's end date is in the past (stale – e.g. last week's data)
+            const thisWeekEnd = getCurrentWarEndMonday();
+            const apiWarEnd = currentWarRaw.endDate ? new Date(currentWarRaw.endDate) : null;
+            const isStaleEndDate = apiWarEnd && apiWarEnd.getTime() < (thisWeekEnd.getTime() - 24 * 60 * 60 * 1000);
+
             if (sameAsLastWeek) {
                 console.log('📥 Frontend: current-war API returned same week as last (S' + currentWarRaw.seasonId + 'W' + currentWarRaw.periodIndex + ') – using placeholder for Current Week');
+            } else if (isStaleEndDate) {
+                console.log('📥 Frontend: current-war API end date is in the past – using placeholder for Current Week');
             } else {
                 currentWar = currentWarRaw;
             }
@@ -1143,7 +1155,7 @@ function processWarData(members, warLog, options = {}) {
         });
     });
 
-    // If current week column has identical scores to last week, the API likely returned stale data – show N/A for current week
+    // If current week column matches last week (all or most scores identical), API likely returned stale data – show N/A for current week
     if (hasCurrentWeek && columns.length >= 2 && filteredColumns.find(c => c.label === columns[0].label)) {
         const col0 = columns[0].label;
         const col1 = columns[1].label;
@@ -1157,14 +1169,15 @@ function processWarData(members, warLog, options = {}) {
                 if (v0 === v1) sameCount++;
             }
         });
-        if (totalCount > 0 && sameCount === totalCount) {
+        const majoritySame = totalCount > 0 && (sameCount === totalCount || (totalCount >= 5 && sameCount >= 0.85 * totalCount));
+        if (majoritySame) {
             playersMap.forEach(player => {
                 player.scores[col0] = null;
                 player.decksUsed[col0] = null;
                 player.boatAttacks[col0] = null;
                 player.trophies[col0] = null;
             });
-            console.log('📥 Current week data matched last week exactly – showing N/A until API updates');
+            console.log('📥 Current week data matched last week (same or majority) – showing N/A until API updates');
         }
     }
 
@@ -2388,7 +2401,7 @@ function renderDashboard() {
         
         demotionList.push(...membersElders);
         
-        // Leaders and co-leaders: (1) 0 points for 12 consecutive weeks, or (2) 12-week rolling average below 1600
+        // Leaders and co-leaders: 12-week rolling average below 1600
         const leaderCoLeaderCandidates = players.filter(p => {
             const role = (p.role || '').toLowerCase();
             return p.isCurrent && (role === 'leader' || role === 'coleader');
@@ -2396,25 +2409,7 @@ function renderDashboard() {
         const streakColumns = allColumns.slice(0, 12);
         for (const player of leaderCoLeaderCandidates) {
             if (streakColumns.length < 12) continue;
-            let consecutiveZeros = 0;
             const scoresForAvg = [];
-            for (const column of streakColumns) {
-                const score = player.scores[column.label];
-                if (score === null || score === undefined) {
-                    consecutiveZeros = 0;
-                    break;
-                }
-                if (score === 0) {
-                    consecutiveZeros++;
-                } else {
-                    consecutiveZeros = 0;
-                    break;
-                }
-            }
-            if (consecutiveZeros >= 12) {
-                demotionList.push({ name: player.name, role: player.role, tag: player.tag, score: 0, weeks: 12, reason: '0 pts x12' });
-                continue;
-            }
             for (const column of streakColumns) {
                 const score = player.scores[column.label];
                 if (score !== null && score !== undefined) scoresForAvg.push(score);
@@ -2489,7 +2484,7 @@ function renderDashboard() {
         }
         
         demotionEl.innerHTML = `
-            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week. Leaders and co-leaders: 0 for 12 straight weeks, or 12-week rolling average below 1600.">?</span></h3>
+            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week. Leaders and co-leaders: 12-week rolling average below 1600.">?</span></h3>
             <ul class="list">
                 ${demotionMessage}
             </ul>

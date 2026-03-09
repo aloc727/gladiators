@@ -1063,8 +1063,10 @@ td:not(:first-child) {
 
 .site-footer {
     margin-top: 28px;
+    padding-top: 12px;
+    border-top: 1px solid #d7dcf1;
     text-align: center;
-    color: rgba(255, 255, 255, 0.6);
+    color: #4b5563;
     font-size: 12px;
 }
 
@@ -1072,9 +1074,9 @@ td:not(:first-child) {
     display: inline-block;
     padding: 6px 12px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: rgba(255, 255, 255, 0.8);
+    background: #e5e7eb;
+    border: 1px solid #d1d5db;
+    color: #374151;
 }
 
 .site-footer .bug-report-btn {
@@ -1082,13 +1084,14 @@ td:not(:first-child) {
     padding: 6px 14px;
     font-size: 12px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #2c54c7;
+    background: #2c54c7;
+    color: #fff;
     cursor: pointer;
 }
 .site-footer .bug-report-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: #2343a0;
+    border-color: #2343a0;
 }
 
 /* Bug report modal */
