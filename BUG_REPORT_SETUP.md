@@ -1,37 +1,21 @@
 # Bug report setup
 
-Submitted bug reports are **emailed** to you so you can find them in one place.
+Bug reports are submitted via **Netlify Forms**. No Resend or environment variables are required.
 
-## Where reports go
+## Production (Netlify)
 
-- Each submission is sent to the address in **BUG_REPORT_EMAIL**.
-- You’ll get one email per report with subject like: `[Gladiators] Bug report 2025-03-05T12:34:56`.
-- The body is the full report (session info + optional user description).
+1. The site includes a hidden form named `bug-report` with `data-netlify="true"`.
+2. When a user submits from the "Report bug" modal, the app POSTs to `/` with the report body. Netlify captures it as a form submission.
+3. **View reports:** Netlify dashboard → your site → **Forms** → **bug-report**. Submissions appear there with the full report text in the `report` field.
 
-## Netlify (production)
-
-1. **Resend** (free tier is enough):
-   - Sign up at [resend.com](https://resend.com) and create an API key.
-   - Optionally add and verify your domain, or use `onboarding@resend.dev` as sender for testing.
-
-2. **Environment variables** in Netlify (Site settings → Environment variables):
-
-   - **RESEND_API_KEY** – your Resend API key.
-   - **BUG_REPORT_EMAIL** – email address that receives reports (e.g. your personal or team inbox).
-   - **BUG_REPORT_FROM** (optional) – sender string, e.g. `Gladiators <notifications@yourdomain.com>`. Default: `Gladiators Bug Reporter <onboarding@resend.dev>`.
-
-3. Redeploy so the function uses the new env vars.
+No env vars, no email setup. Netlify’s free tier includes form submissions.
 
 ## Local dev (server.js)
 
-Use the same env vars in your `.env` file:
+When you run `npm start`, POSTs to `/` with `form-name=bug-report` are handled by the local server. Each report is appended to **`data/bug_reports.jsonl`** (one JSON object per line: `{"at":"...","report":"..."}`). The `data/` directory is in `.gitignore`.
 
-- **RESEND_API_KEY**
-- **BUG_REPORT_EMAIL**
-- **BUG_REPORT_FROM** (optional)
+To view local reports, open `data/bug_reports.jsonl` in an editor, or run e.g. `tail -n 5 data/bug_reports.jsonl`.
 
-Then run `npm start` (or `npm run dev`). Submissions from the app will send to **BUG_REPORT_EMAIL** via Resend.
+## Optional: Resend (legacy)
 
-## If bug report is not configured
-
-If **RESEND_API_KEY** or **BUG_REPORT_EMAIL** is missing, the API returns 503 and the UI shows: “Bug report is not configured yet.” No email is sent until both are set.
+The `/api/bug-report` endpoint and Resend integration are still in the codebase but no longer used by the UI. If you prefer email delivery, you could switch the frontend back to POSTing to `/api/bug-report` and set `RESEND_API_KEY` and `BUG_REPORT_EMAIL` in Netlify env vars.

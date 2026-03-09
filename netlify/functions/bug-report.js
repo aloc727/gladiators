@@ -1,4 +1,5 @@
 /**
+ * GET: Return whether bug report is configured (for debugging). No secrets exposed.
  * POST: Submit a bug report. Sends the report to BUG_REPORT_EMAIL via Resend.
  * Body: { "report": "plain text report content" }
  * Env: RESEND_API_KEY, BUG_REPORT_EMAIL (optional: BUG_REPORT_FROM, default "Gladiators Bug Reporter <onboarding@resend.dev>")
@@ -6,15 +7,25 @@
 const { Resend } = require('resend');
 
 exports.handler = async (event) => {
+  const apiKey = process.env.RESEND_API_KEY || '';
+  const toEmail = process.env.BUG_REPORT_EMAIL || '';
+  const configured = !!(apiKey && toEmail);
+
+  if (event.httpMethod === 'GET') {
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ configured }),
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const apiKey = process.env.RESEND_API_KEY || '';
-  const toEmail = process.env.BUG_REPORT_EMAIL || '';
   const from = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
 
-  if (!apiKey || !toEmail) {
+  if (!configured) {
     return {
       statusCode: 503,
       headers: { 'Content-Type': 'application/json' },

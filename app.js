@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.35.0';
+const UI_VERSION = 'v1.37.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -331,19 +331,22 @@ function initBugReport() {
         submitBtn.disabled = true;
         setFeedback('Sending…', false);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/bug-report`, {
+            // Netlify Forms: POST to same page with form-name and report (no env vars; view submissions in Netlify → Forms)
+            const body = new URLSearchParams({
+                'form-name': 'bug-report',
+                report: report
+            }).toString();
+            const res = await fetch(window.location.origin + '/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ report }),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body
             });
-            const data = await res.json().catch(() => ({}));
             if (res.ok) {
                 setFeedback('Thanks! Your report has been submitted.', false);
                 descriptionEl.value = '';
                 setTimeout(() => hideModal(), 2000);
             } else {
-                const msg = data.error || (res.status === 503 ? 'Bug report is not configured yet.' : 'Something went wrong. Try again.');
-                setFeedback(msg, true);
+                setFeedback('Something went wrong. Try again.', true);
             }
         } catch (_) {
             setFeedback('Network error. Please try again.', true);

@@ -188,10 +188,18 @@
 
         </main>
         <footer class="site-footer" role="contentinfo">
-            <span class="version-tag" id="uiVersion">UI v1.35.0</span>
+            <span class="version-tag" id="uiVersion">UI v1.37.0</span>
             <button type="button" id="bugReportBtn" class="bug-report-btn" aria-label="Report a bug">Report bug</button>
         </footer>
     </div>
+
+    <!-- Netlify Forms: hidden form so submissions are stored in Netlify dashboard (Site → Forms). No env vars needed. -->
+    <form name="bug-report" method="POST" action="/" data-netlify="true" netlify-honeypot="bug-report-bot" id="bugReportNetlifyForm" hidden aria-hidden="true">
+        <input type="hidden" name="form-name" value="bug-report">
+        <label for="bug-report-bot">Leave empty</label>
+        <input type="text" name="bug-report-bot" id="bug-report-bot" tabindex="-1" autocomplete="off">
+        <textarea name="report" id="bugReportField"></textarea>
+    </form>
 
     <div id="bugReportModal" class="bug-report-modal" role="dialog" aria-labelledby="bugReportTitle" aria-modal="true" hidden>
         <div class="bug-report-content">
