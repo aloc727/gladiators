@@ -1,6 +1,6 @@
 {
   "name": "gladiators-war-stats",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Website to display Gladiators clan war statistics",
   "main": "server.js",
   "scripts": {

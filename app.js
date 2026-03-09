@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v2.0.0';
+const UI_VERSION = 'v2.0.1';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -1677,39 +1677,168 @@ function renderStrategyTab() {
 
     const totalDonations = players.reduce((sum, p) => sum + (p.donations || 0), 0);
     const totalDonationsReceived = players.reduce((sum, p) => sum + (p.donationsReceived || 0), 0);
+    const activeDonors = players.filter(p => (p.donations || 0) > 0).length;
+    const zeroDonors = players.filter(p => (p.donations || 0) === 0).length;
+    const totalMembers = players.length;
     const donorList = players
         .filter(p => (p.donations || 0) > 0)
-        .map(p => ({ name: p.name, tag: p.tag, donations: p.donations || 0 }))
+        .map(p => ({ name: p.name, tag: p.tag, donations: p.donations || 0, received: p.donationsReceived || 0 }))
         .sort((a, b) => b.donations - a.donations)
-        .slice(0, 10);
+        .slice(0, 15);
+    const scatterPoints = players
+        .filter(p => (p.donations || 0) > 0 || (p.donationsReceived || 0) > 0)
+        .map(p => ({ name: p.name, given: p.donations || 0, received: p.donationsReceived || 0 }));
+    const maxGiven = Math.max(1, ...scatterPoints.map(d => d.given));
+    const maxReceived = Math.max(1, ...scatterPoints.map(d => d.received));
+    const netBalanceList = players
+        .map(p => ({ name: p.name, given: p.donations || 0, received: p.donationsReceived || 0, net: (p.donationsReceived || 0) - (p.donations || 0) }))
+        .filter(p => p.given > 0 || p.received > 0);
+    const netDonors = netBalanceList.filter(d => d.net < 0).sort((a, b) => a.net - b.net).slice(0, 8);
+    const netReceivers = netBalanceList.filter(d => d.net > 0).sort((a, b) => b.net - a.net).slice(0, 8);
+    const maxAbsNet = Math.max(1, ...netDonors.map(d => Math.abs(d.net)), ...netReceivers.map(d => Math.abs(d.net)));
+    const buckets = [
+        { label: '0', min: 0, max: 0 },
+        { label: '1 to 25', min: 1, max: 25 },
+        { label: '26 to 50', min: 26, max: 50 },
+        { label: '51 to 100', min: 51, max: 100 },
+        { label: '101+', min: 101, max: 1e9 }
+    ];
+    const participationBuckets = buckets.map(b => ({
+        label: b.label,
+        count: players.filter(p => {
+            const g = p.donations || 0;
+            return g >= b.min && g <= b.max;
+        }).length
+    }));
+    const maxBucketCount = Math.max(1, ...participationBuckets.map(b => b.count));
 
-    const maxDonation = donorList[0]?.donations || 1;
-    const maxPpd = topEfficiency[0]?.ppd || 1;
+    const crownSvg = '<svg class="donation-icon donation-icon-crown" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2L9 8H3l4 4-1 8h12l-1-8 4-4h-6l-3-6z"/></svg>';
+    const arrowUpSvg = '<svg class="donation-icon donation-icon-arrow" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4l8 8h-5v8h-6v-8H4l8-8z"/></svg>';
+    const arrowDownSvg = '<svg class="donation-icon donation-icon-arrow" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20l-8-8h5V4h6v8h5l-8 8z"/></svg>';
+    const shieldSvg = '<svg class="donation-icon donation-icon-shield" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2L4 6v6c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V6l-8-4zm0 2.2l6 3v5.8c0 4.2-2.9 8.5-6 9.8-3.1-1.3-6-5.6-6-9.8V7.2l6-3z"/></svg>';
+
+    const scatterW = 280; const scatterH = 200; const pad = 24;
+    const toScatter = (d) => ({
+        ...d,
+        x: pad + ((d.given / maxGiven) * (scatterW - 2 * pad)) || 0,
+        y: scatterH - pad - ((d.received / maxReceived) * (scatterH - 2 * pad)) || 0
+    });
+    const scatterWithPos = scatterPoints.map(toScatter);
+    const top5ByGiven = [...scatterWithPos].sort((a, b) => b.given - a.given).slice(0, 5);
+    const top5ByReceived = [...scatterWithPos].sort((a, b) => b.received - a.received).slice(0, 5);
+    const labeledNames = new Set([...top5ByGiven.map(d => d.name), ...top5ByReceived.map(d => d.name)]);
+    const scatterCircles = scatterWithPos.map(d =>
+        `<circle cx="${d.x}" cy="${d.y}" r="4" class="scatter-dot" data-name="${escapeHtml(d.name)}" data-given="${d.given}" data-received="${d.received}"/>`
+    ).join('');
+    const scatterLabels = scatterWithPos.filter(d => labeledNames.has(d.name)).map(d =>
+        `<text x="${d.x}" y="${d.y - 6}" class="scatter-label" text-anchor="middle">${escapeHtml(d.name)}</text>`
+    ).join('');
+
     container.innerHTML = `
         <div class="strategy-section">
             <h2>Strategy &amp; insights</h2>
             <p class="strategy-lead">Using war points and decks used we can see efficiency and participation. The API does not report win/loss per battle—only total points and number of battles (decks used).</p>
         </div>
-        <div class="strategy-section infographic-donations">
-            <h3>Donations</h3>
-            <div class="infographic-stats-row">
-                <div class="infographic-stat-card infographic-given">
-                    <span class="infographic-stat-value">${formatNumber(totalDonations)}</span>
-                    <span class="infographic-stat-label">Given</span>
+        <div class="strategy-section donation-economy">
+            <h3 class="donation-economy-title">Gladiators Donation Economy</h3>
+            <div class="donation-stat-cards">
+                <div class="donation-card donation-card-given">
+                    <span class="donation-card-icon">${arrowUpSvg}</span>
+                    <span class="donation-card-value">${formatNumber(totalDonations)}</span>
+                    <span class="donation-card-label">Total Given</span>
                 </div>
-                <div class="infographic-stat-card infographic-received">
-                    <span class="infographic-stat-value">${formatNumber(totalDonationsReceived)}</span>
-                    <span class="infographic-stat-label">Received</span>
+                <div class="donation-card donation-card-received">
+                    <span class="donation-card-icon">${arrowDownSvg}</span>
+                    <span class="donation-card-value">${formatNumber(totalDonationsReceived)}</span>
+                    <span class="donation-card-label">Total Received</span>
+                </div>
+                <div class="donation-card donation-card-active">
+                    <span class="donation-card-icon">${shieldSvg}</span>
+                    <span class="donation-card-value">${activeDonors} <span class="donation-card-sub">/ ${totalMembers}</span></span>
+                    <span class="donation-card-label">Active Donors</span>
+                </div>
+                <div class="donation-card donation-card-zero">
+                    <span class="donation-card-value">${zeroDonors}</span>
+                    <span class="donation-card-label">Zero Donors</span>
                 </div>
             </div>
-            ${donorList.length ? `
-            <p class="infographic-sub">Top donors</p>
-            <div class="infographic-bars">
-                ${donorList.map(d => {
-                    const pct = maxDonation ? Math.min(100, Math.round((d.donations / maxDonation) * 100)) : 0;
-                    return `<div class="infographic-bar-row"><span class="infographic-bar-name">${escapeHtml(d.name)}</span><div class="infographic-bar-wrap"><div class="infographic-bar" style="width:${pct}%"></div><span class="infographic-bar-value">${formatNumber(d.donations)}</span></div></div>`;
-                }).join('')}
-            </div>` : '<p class="muted">No donation data this period.</p>'}
+            <div class="donation-economy-grid">
+                <div class="donation-panel donation-leaderboard">
+                    <h4 class="donation-panel-title">Top Donors Leaderboard</h4>
+                    <div class="donation-leaderboard-bars">
+                        ${donorList.length ? (() => {
+                            const maxG = Math.max(1, donorList[0].donations);
+                            return donorList.map((d, i) => {
+                                const pct = (d.donations / maxG) * 100;
+                                const rankClass = i === 0 ? ' donation-bar-gold' : i === 1 ? ' donation-bar-silver' : i === 2 ? ' donation-bar-bronze' : '';
+                                return `<div class="donation-bar-row${rankClass}">
+                                    <div class="donation-bar-meta">
+                                        <span class="donation-bar-rank">${i === 0 ? crownSvg : (i + 1)}</span>
+                                        <span class="donation-bar-name-wrap">
+                                            <span class="donation-bar-name">${escapeHtml(d.name)}</span>
+                                            <span class="donation-bar-received">received ${formatNumber(d.received)}</span>
+                                        </span>
+                                    </div>
+                                    <div class="donation-bar-track"><div class="donation-bar-fill" style="width:${pct}%"></div><span class="donation-bar-value">${formatNumber(d.donations)}</span></div>
+                                </div>`;
+                            }).join('');
+                        })() : '<p class="muted">No donation data.</p>'}
+                    </div>
+                </div>
+                <div class="donation-panel donation-scatter">
+                    <h4 class="donation-panel-title">Given vs Received</h4>
+                    <div class="donation-scatter-wrap">
+                        <svg class="donation-scatter-svg" viewBox="0 0 ${scatterW} ${scatterH}" aria-label="Scatter plot: given vs received">
+                            <line x1="${pad}" y1="${scatterH - pad}" x2="${scatterW - pad}" y2="${pad}" class="scatter-diagonal"/>
+                            ${scatterCircles}
+                            ${scatterLabels}
+                        </svg>
+                        <p class="donation-scatter-caption">Above line = receives more than gives. Labeled: top 5 donors, top 5 receivers.</p>
+                    </div>
+                </div>
+                <div class="donation-panel donation-diverging">
+                    <h4 class="donation-panel-title">Net Balance</h4>
+                    <p class="donation-diverging-caption-top">net = received − given. Left: gave more. Right: received more.</p>
+                    <div class="donation-diverging-two-col">
+                        <div class="diverging-col diverging-col-donors">
+                            <h5 class="diverging-col-title">Net Donors</h5>
+                            ${netDonors.length ? netDonors.map(d => {
+                                const pct = (Math.abs(d.net) / maxAbsNet) * 100;
+                                return `<div class="diverging-row">
+                                    <span class="diverging-name">${escapeHtml(d.name)}</span>
+                                    <div class="diverging-bar-wrap diverging-left-wrap"><div class="diverging-bar diverging-receive" style="width:${pct}%"></div></div>
+                                    <span class="diverging-value diverging-neg">${formatNumber(d.net)}</span>
+                                </div>`;
+                            }).join('') : '<p class="muted">None</p>'}
+                        </div>
+                        <div class="diverging-col diverging-col-receivers">
+                            <h5 class="diverging-col-title">Net Receivers</h5>
+                            ${netReceivers.length ? netReceivers.map(d => {
+                                const pct = (Math.abs(d.net) / maxAbsNet) * 100;
+                                return `<div class="diverging-row">
+                                    <span class="diverging-name">${escapeHtml(d.name)}</span>
+                                    <div class="diverging-bar-wrap diverging-right-wrap"><div class="diverging-bar diverging-give" style="width:${pct}%"></div></div>
+                                    <span class="diverging-value diverging-pos">+${formatNumber(d.net)}</span>
+                                </div>`;
+                            }).join('') : '<p class="muted">None</p>'}
+                        </div>
+                    </div>
+                </div>
+                <div class="donation-panel donation-histogram">
+                    <h4 class="donation-panel-title">Participation Distribution</h4>
+                    <div class="donation-histogram-chart">
+                        ${participationBuckets.map(b => {
+                            const pct = maxBucketCount ? (b.count / maxBucketCount) * 100 : 0;
+                            return `<div class="histogram-row">
+                                <span class="histogram-label">${b.label}</span>
+                                <div class="histogram-bar-wrap"><div class="histogram-bar" style="width:${pct}%"></div></div>
+                                <span class="histogram-count">${b.count}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <p class="donation-histogram-caption">Members by donations given. Shows whether the clan is broadly engaged or carried by a few.</p>
+                </div>
+            </div>
         </div>
         <div class="strategy-section infographic-efficiency">
             <h3>Points per deck (efficiency)</h3>

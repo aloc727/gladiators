@@ -1430,45 +1430,276 @@ body.cookie-consent-pending .cookie-consent {
 }
 .strategy-table tbody tr:hover { background: #f8fafc; }
 
-/* Strategy infographics: Donations & Efficiency */
-.infographic-donations .infographic-stats-row,
-.infographic-efficiency .infographic-stats-row {
-    display: flex;
-    gap: 1.5rem;
-    margin: 1rem 0;
+/* Gladiators Donation Economy – Clash Royale feel: royal blue, green, amber, dark navy, light gray */
+.donation-economy {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    padding: 1.25rem 1.5rem;
 }
-.infographic-stat-card {
-    flex: 1;
+.donation-economy-title {
+    font-size: 1.15rem;
+    color: #0f172a;
+    margin-bottom: 1.25rem;
+    font-weight: 700;
+}
+.donation-stat-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.donation-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
     text-align: center;
-    padding: 1.25rem 1rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
-.infographic-stat-card.infographic-given {
-    background: linear-gradient(145deg, #dbeafe 0%, #93c5fd 100%);
-    border: 1px solid #60a5fa;
-}
-.infographic-stat-card.infographic-received {
-    background: linear-gradient(145deg, #d1fae5 0%, #6ee7b7 100%);
-    border: 1px solid #34d399;
-}
-.infographic-stat-value {
+.donation-card-given { border-left: 3px solid #1e3a8a; }
+.donation-card-received { border-left: 3px solid #047857; }
+.donation-card-active { border-left: 3px solid #b45309; }
+.donation-card-zero { border-left: 3px solid #64748b; }
+.donation-card-icon {
     display: block;
-    font-size: 1.75rem;
+    margin-bottom: 0.35rem;
+}
+.donation-icon {
+    width: 20px;
+    height: 20px;
+    margin: 0 auto;
+    display: block;
+}
+.donation-card-given .donation-icon { color: #1e3a8a; }
+.donation-card-received .donation-icon { color: #047857; }
+.donation-card-active .donation-icon { color: #b45309; }
+.donation-card-value {
+    display: block;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #0f172a;
     letter-spacing: -0.02em;
 }
-.infographic-stat-card.infographic-given .infographic-stat-value { color: #1e40af; }
-.infographic-stat-card.infographic-received .infographic-stat-value { color: #047857; }
-.infographic-stat-label {
-    font-size: 0.85rem;
+.donation-card-given .donation-card-value { color: #1e3a8a; }
+.donation-card-received .donation-card-value { color: #047857; }
+.donation-card-active .donation-card-value { color: #0f172a; }
+.donation-card-sub { font-size: 0.9rem; font-weight: 600; color: #64748b; }
+.donation-card-zero .donation-card-value { color: #475569; }
+.donation-card-label {
+    display: block;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #475569;
+    letter-spacing: 0.04em;
+    color: #64748b;
     margin-top: 0.25rem;
+}
+.donation-economy-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+}
+.donation-panel {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.donation-panel-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+.donation-leaderboard-bars { margin-top: 0.25rem; }
+.donation-bar-row {
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+.donation-bar-row:last-child { margin-bottom: 0; }
+.donation-bar-meta {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 2px;
+}
+.donation-bar-rank {
+    min-width: 1.75rem;
+    font-weight: 700;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+.donation-bar-name-wrap { display: flex; flex-direction: column; gap: 0; }
+.donation-bar-name { font-weight: 600; color: #0f172a; }
+.donation-bar-received { font-size: 0.75rem; color: #94a3b8; }
+.donation-bar-track {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 22px;
+    position: relative;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    max-width: 100%;
+}
+.donation-bar-fill {
+    height: 100%;
+    min-width: 4px;
+    border-radius: 4px;
+    background: #1e3a8a;
+    transition: width 0.25s ease;
+}
+.donation-bar-row.donation-bar-gold .donation-bar-fill { background: linear-gradient(90deg, #b45309 0%, #d97706 100%); }
+.donation-bar-row.donation-bar-silver .donation-bar-fill { background: linear-gradient(90deg, #64748b 0%, #94a3b8 100%); }
+.donation-bar-row.donation-bar-bronze .donation-bar-fill { background: linear-gradient(90deg, #92400e 0%, #b45309 100%); }
+.donation-bar-value {
+    position: absolute;
+    right: 8px;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.85rem;
+    text-shadow: 0 0 2px #fff, 0 0 4px #fff;
+}
+.donation-icon-crown {
+    width: 18px;
+    height: 18px;
+    color: #b45309;
+}
+.donation-scatter-wrap { position: relative; }
+.donation-scatter-svg {
+    width: 100%;
+    max-width: 280px;
+    height: auto;
     display: block;
+    margin: 0 auto;
+}
+.scatter-diagonal {
+    stroke: #cbd5e1;
+    stroke-width: 1;
+    stroke-dasharray: 4 2;
+}
+.scatter-dot {
+    fill: #1e3a8a;
+    stroke: #fff;
+    stroke-width: 1.5;
+}
+.scatter-dot:hover { fill: #2563eb; }
+.scatter-label {
+    font-size: 9px;
+    fill: #0f172a;
+    font-weight: 600;
+}
+.donation-scatter-caption,
+.donation-diverging-caption-top,
+.donation-diverging-caption,
+.donation-histogram-caption {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0.5rem 0 0;
+}
+.donation-diverging-caption-top { margin: 0 0 0.75rem; }
+.donation-diverging-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+}
+.diverging-col-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+}
+.diverging-col .diverging-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+}
+.diverging-col .diverging-name {
+    min-width: 70px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #0f172a;
+}
+.diverging-col .diverging-bar-wrap {
+    flex: 1;
+    height: 16px;
+    min-width: 40px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #f1f5f9;
+}
+.diverging-left-wrap .diverging-bar,
+.diverging-right-wrap .diverging-bar { display: block; }
+.diverging-bar {
+    height: 100%;
+    min-width: 4px;
+    border-radius: 3px;
+    transition: width 0.2s ease;
+}
+.diverging-bar.diverging-give { background: #047857; }
+.diverging-bar.diverging-receive { background: #1e3a8a; }
+.diverging-col .diverging-value {
+    min-width: 3rem;
+    text-align: right;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+.diverging-value.diverging-neg { color: #1e3a8a; }
+.diverging-value.diverging-pos { color: #047857; }
+.donation-histogram-chart .histogram-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+}
+.donation-histogram-chart .histogram-label {
+    min-width: 48px;
+    color: #0f172a;
+    font-weight: 500;
+}
+.donation-histogram-chart .histogram-bar-wrap {
+    flex: 1;
+    height: 18px;
+    background: #f1f5f9;
+    border-radius: 4px;
+    overflow: hidden;
+    max-width: 120px;
+}
+.donation-histogram-chart .histogram-bar {
+    height: 100%;
+    background: #1e3a8a;
+    border-radius: 4px;
+    min-width: 4px;
+    transition: width 0.25s ease;
+}
+.donation-histogram-chart .histogram-count {
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.8rem;
+}
+@media (max-width: 900px) {
+    .donation-stat-cards { grid-template-columns: repeat(2, 1fr); }
+    .donation-economy-grid { grid-template-columns: 1fr; }
+}
+
+/* Strategy infographics: Efficiency (kept) */
+.infographic-efficiency .infographic-stats-row {
+    display: flex;
+    gap: 1.5rem;
+    margin: 1rem 0;
 }
 .infographic-sub { color: #64748b; font-size: 0.9rem; margin: 0.75rem 0 0.5rem; }
 .infographic-bars { margin-top: 0.75rem; }
