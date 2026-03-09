@@ -23,6 +23,12 @@ let fullTableRange = localStorage.getItem('fullTableRange') || 'last12weeks';
 let currentMembersOnly = true;
 let userSort = null;
 
+/** Last error message for bug reports (set by loadData catch and window.onerror) */
+let lastReportedError = null;
+window.addEventListener('error', (event) => {
+    lastReportedError = event.message || String(event);
+});
+
 // Clan policy thresholds
 const WAR_REQUIREMENT = 1600;
 const WARNING_THRESHOLD = 800;
@@ -68,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.26.0';
+const UI_VERSION = 'v1.31.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -230,7 +236,122 @@ document.addEventListener('DOMContentLoaded', () => {
     if (downloadFullTableCsvBtn) {
         downloadFullTableCsvBtn.addEventListener('click', () => downloadFullTableCsv());
     }
+
+    // Bug report: open modal, copy report, mailto
+    initBugReport();
 });
+
+/** Build a plain-text bug report with session info for debugging (visual, data, code). */
+function buildBugReportText(userDescription) {
+    const lines = [];
+    lines.push('--- Bug Report ---');
+    lines.push(`Time: ${new Date().toISOString()}`);
+    lines.push(`URL: ${window.location.href}`);
+    lines.push(`Viewport: ${window.innerWidth} x ${window.innerHeight}`);
+    lines.push(`User agent: ${navigator.userAgent}`);
+    const versionEl = document.getElementById('uiVersion');
+    lines.push(`UI version: ${versionEl ? versionEl.textContent : UI_VERSION}`);
+    lines.push('');
+    lines.push('--- Session / UI state ---');
+    lines.push(`Current tab: ${currentTab}`);
+    lines.push(`War table range: ${currentRange}`);
+    lines.push(`Full table range: ${fullTableRange}`);
+    lines.push(`Current members only: ${currentMembersOnly}`);
+    if (userSort) {
+        lines.push(`Sort: column=${userSort.column} direction=${userSort.direction}`);
+    }
+    lines.push('');
+    lines.push('--- Data state ---');
+    if (latestData) {
+        lines.push(`Columns count: ${latestData.columns.length}`);
+        lines.push(`Players count: ${latestData.players.length}`);
+        if (lastDataUpdatedAt) {
+            lines.push(`Last data updated: ${new Date(lastDataUpdatedAt).toISOString()}`);
+        }
+        const colLabels = latestData.columns.slice(0, 3).map(c => c.displayLabel || c.label || c.key).filter(Boolean);
+        if (colLabels.length) lines.push(`First column labels: ${colLabels.join(', ')}`);
+        const lastCols = latestData.columns.slice(-2).map(c => c.displayLabel || c.label || c.key).filter(Boolean);
+        if (lastCols.length) lines.push(`Last column labels: ${lastCols.join(', ')}`);
+    } else {
+        lines.push('No data loaded yet.');
+    }
+    lines.push('');
+    lines.push('--- Code / errors ---');
+    lines.push(lastReportedError ? `Last error: ${lastReportedError}` : 'No captured error.');
+    if (userDescription && userDescription.trim()) {
+        lines.push('');
+        lines.push('--- User description ---');
+        lines.push(userDescription.trim());
+    }
+    return lines.join('\n');
+}
+
+function initBugReport() {
+    const btn = document.getElementById('bugReportBtn');
+    const modal = document.getElementById('bugReportModal');
+    const descriptionEl = document.getElementById('bugReportDescription');
+    const submitBtn = document.getElementById('bugReportSubmit');
+    const closeBtn = document.getElementById('bugReportClose');
+    const feedbackEl = document.getElementById('bugReportFeedback');
+    if (!btn || !modal) return;
+
+    function showModal() {
+        modal.hidden = false;
+        if (feedbackEl) {
+            feedbackEl.textContent = '';
+            feedbackEl.classList.remove('error');
+        }
+        descriptionEl?.focus();
+    }
+    function hideModal() {
+        modal.hidden = true;
+        document.removeEventListener('keydown', onEscape);
+    }
+    function onEscape(e) {
+        if (e.key === 'Escape') hideModal();
+    }
+    function setFeedback(message, isError) {
+        if (!feedbackEl) return;
+        feedbackEl.textContent = message;
+        feedbackEl.classList.toggle('error', !!isError);
+    }
+
+    btn.addEventListener('click', () => {
+        showModal();
+        document.addEventListener('keydown', onEscape);
+    });
+    closeBtn?.addEventListener('click', hideModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) hideModal();
+    });
+
+    submitBtn?.addEventListener('click', async () => {
+        const report = buildBugReportText(descriptionEl?.value ?? '');
+        if (!submitBtn) return;
+        submitBtn.disabled = true;
+        setFeedback('Sending…', false);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/bug-report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ report }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                setFeedback('Thanks! Your report has been submitted.', false);
+                descriptionEl.value = '';
+                setTimeout(() => hideModal(), 2000);
+            } else {
+                const msg = data.error || (res.status === 503 ? 'Bug report is not configured yet.' : 'Something went wrong. Try again.');
+                setFeedback(msg, true);
+            }
+        } catch (_) {
+            setFeedback('Network error. Please try again.', true);
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    });
+}
 
 // Schedule the next automatic refresh
 function scheduleNextRefresh() {
@@ -316,14 +437,23 @@ async function loadData() {
                 .catch(() => null)
         ]);
 
-        // Use whatever the API returns as "current week" – currentriverrace is the source of truth (new week when the app has rolled over)
-        const currentWar = (currentWarRaw && currentWarRaw.participants && currentWarRaw.participants.length)
-            ? currentWarRaw
-            : null;
+        // Use API response as "current week" only when it's actually a new week (not last week again – API sometimes returns last week's race after rollover)
+        let currentWar = null;
+        if (currentWarRaw && currentWarRaw.participants && currentWarRaw.participants.length) {
+            const sameAsLastWeek = historicalWars.length > 0 &&
+                currentWarRaw.seasonId != null && currentWarRaw.periodIndex != null &&
+                currentWarRaw.seasonId === historicalWars[0].seasonId &&
+                currentWarRaw.periodIndex === historicalWars[0].periodIndex;
+            if (sameAsLastWeek) {
+                console.log('📥 Frontend: current-war API returned same week as last (S' + currentWarRaw.seasonId + 'W' + currentWarRaw.periodIndex + ') – using placeholder for Current Week');
+            } else {
+                currentWar = currentWarRaw;
+            }
+        }
 
         console.log(`📥 Frontend: ${historicalWars.length} historical wars, ${currentWar ? '1' : '0'} current war (live, every 5 min)`);
 
-        // Combine: current war first so the first column is always the API's current week
+        // Combine: current war first, or placeholder when API didn't return a new week
         const warLog = currentWar ? [currentWar, ...historicalWars] : historicalWars;
         console.log(`📥 Frontend: Combined ${warLog.length} total wars to process`);
         
@@ -376,6 +506,7 @@ async function loadData() {
         
     } catch (error) {
         console.error('Error loading data:', error);
+        lastReportedError = error.message || String(error);
         errorMessage.textContent = `Error: ${error.message}`;
         errorMessage.style.display = 'block';
         
@@ -579,7 +710,7 @@ function processWarData(members, warLog, options = {}) {
     const playersByName = new Map();
     const allPlayers = []; // Track all players including dynamically added ones
 
-    // Initialize all players with empty scores
+    // Initialize all players with empty scores (include donations from API for Strategy tab)
     members.forEach(member => {
         const player = {
             name: member.name,
@@ -587,6 +718,8 @@ function processWarData(members, warLog, options = {}) {
             role: member.role || 'member',
             firstSeen: member.firstSeen || null,
             isCurrent: member.isCurrent !== false,
+            donations: member.donations != null ? member.donations : 0,
+            donationsReceived: member.donationsReceived != null ? member.donationsReceived : 0,
             scores: {},
             decksUsed: {},
             boatAttacks: {},
@@ -765,6 +898,7 @@ function processWarData(members, warLog, options = {}) {
             return;
         }
         const existing = dateMergedMap.get(uniqueKey);
+        if (war.clanPlace != null) existing.clanPlace = war.clanPlace;
         const existingLabel = existing.label || '';
         const nextLabel = war.label || '';
         const preferredLabel = nextLabel.includes('Season') || nextLabel.length > existingLabel.length ? nextLabel : existingLabel;
@@ -1008,7 +1142,32 @@ function processWarData(members, warLog, options = {}) {
             matchedParticipants++;
         });
     });
-    
+
+    // If current week column has identical scores to last week, the API likely returned stale data – show N/A for current week
+    if (hasCurrentWeek && columns.length >= 2 && filteredColumns.find(c => c.label === columns[0].label)) {
+        const col0 = columns[0].label;
+        const col1 = columns[1].label;
+        let sameCount = 0;
+        let totalCount = 0;
+        playersMap.forEach(player => {
+            const v0 = player.scores[col0];
+            const v1 = player.scores[col1];
+            if (v0 != null || v1 != null) {
+                totalCount++;
+                if (v0 === v1) sameCount++;
+            }
+        });
+        if (totalCount > 0 && sameCount === totalCount) {
+            playersMap.forEach(player => {
+                player.scores[col0] = null;
+                player.decksUsed[col0] = null;
+                player.boatAttacks[col0] = null;
+                player.trophies[col0] = null;
+            });
+            console.log('📥 Current week data matched last week exactly – showing N/A until API updates');
+        }
+    }
+
     // Debug summary - always log to help diagnose
     console.log('Participant matching summary:', {
         totalWars: dateMergedWars.length,
@@ -1348,6 +1507,7 @@ function renderFullTable() {
     document.querySelectorAll('.range-tab[data-context="fulltable"]').forEach(b => {
         b.classList.toggle('active', (b.dataset.range || '').replace(/^fulltable-/, '') === fullTableRange);
     });
+    // Same processed data as War Table – current-week placeholder and "same as last week" N/A logic apply here too
     const columns = getVisibleColumns(latestData.columns, fullTableRange);
     const players = latestData.players.filter(p => (currentMembersOnly ? p.isCurrent : true));
     const showP = document.getElementById('ftShowPoints')?.checked !== false;
@@ -1472,14 +1632,38 @@ function renderStrategyTab() {
         return { label: (col.displayLabel || col.label).split('(')[0].trim(), count, total };
     }).reverse();
 
-    const boatNote = weeksWithBoat > 0
-        ? `Total boat attacks (across ${participantWeeks.length} participant-weeks): <strong>${formatNumber(totalBoat)}</strong>. Boat attacks help the clan boat; battles (decks used) earn war points.`
-        : 'Boat attack data is not available for most historical weeks; it appears when the API provides it.';
+    // Weekly boat attacks and war place (clanPlace from API when available)
+    const boatByWeek = columns.slice(0, 12).map(col => {
+        let boat = 0;
+        players.forEach(p => {
+            const v = p.boatAttacks?.[col.label];
+            if (v != null) boat += v;
+        });
+        const place = col.war?.clanPlace;
+        return {
+            label: (col.displayLabel || col.label).split('(')[0].trim(),
+            boat,
+            place: place != null ? place : null
+        };
+    }).reverse();
+
+    const totalDonations = players.reduce((sum, p) => sum + (p.donations || 0), 0);
+    const totalDonationsReceived = players.reduce((sum, p) => sum + (p.donationsReceived || 0), 0);
+    const donorList = players
+        .filter(p => (p.donations || 0) > 0)
+        .map(p => ({ name: p.name, tag: p.tag, donations: p.donations || 0 }))
+        .sort((a, b) => b.donations - a.donations)
+        .slice(0, 10);
 
     container.innerHTML = `
         <div class="strategy-section">
             <h2>Strategy &amp; insights</h2>
             <p class="strategy-lead">Using war points and decks used we can see efficiency and participation. The API does not report win/loss per battle—only total points and number of battles (decks used).</p>
+        </div>
+        <div class="strategy-section">
+            <h3>Donations</h3>
+            <p>Clan total: <strong>${formatNumber(totalDonations)}</strong> given, <strong>${formatNumber(totalDonationsReceived)}</strong> received (current members).</p>
+            ${donorList.length ? `<ul class="strategy-list"><li>Top donors: ${donorList.map(d => `${escapeHtml(d.name)} (${formatNumber(d.donations)})`).join(', ')}</li></ul>` : '<p class="muted">No donation data this period.</p>'}
         </div>
         <div class="strategy-section">
             <h3>Points per deck (efficiency)</h3>
@@ -1499,12 +1683,20 @@ function renderStrategyTab() {
             </div>
         </div>
         <div class="strategy-section">
-            <h3>Boat attacks</h3>
-            <p>${boatNote}</p>
+            <h3>Boat attacks by week</h3>
+            <p>Total boat attacks per week and war place (when the API provides it). Boat attacks help the clan boat; battles earn war points.</p>
+            <div class="strategy-table-wrap">
+                <table class="strategy-table" aria-label="Boat attacks and war place by week">
+                    <thead><tr><th>Week</th><th>Boat attacks</th><th>Place</th></tr></thead>
+                    <tbody>
+                        ${boatByWeek.map(w => `<tr><td>${escapeHtml(w.label)}</td><td>${formatNumber(w.boat)}</td><td>${w.place != null ? '#' + w.place : '—'}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
         </div>
         <div class="strategy-section strategy-note">
             <h3>About the data</h3>
-            <p><strong>Battles</strong> = decks used (each deck use is one battle). <strong>Wins/losses</strong> are not reported by the API—only total war points and battle count. So we can see who battles and how many points they earn, but not exact W–L records.</p>
+            <p><strong>Battles</strong> = decks used (each deck use is one battle). <strong>Wins/losses</strong> are not reported by the API—only total war points and battle count. Donations are from the clan members API. War place is shown when the API returns standings for a week.</p>
         </div>
     `;
 }

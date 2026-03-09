@@ -286,6 +286,21 @@ function mergeParticipantLists(primary = [], secondary = []) {
     return Array.from(mergedMap.values());
 }
 
+/** Derive our clan's place/rank in the war from API item (standings or similar). Returns 1-based place or null. */
+function deriveClanPlace(entry) {
+    const tagNorm = (t) => (t || '').replace(/^#/, '').toUpperCase();
+    const ourTag = tagNorm(CLAN_TAG);
+    if (entry.standings && Array.isArray(entry.standings)) {
+        const idx = entry.standings.findIndex(s => tagNorm(s.tag) === ourTag);
+        if (idx >= 0) {
+            const r = entry.standings[idx];
+            return r.rank != null ? r.rank : (idx + 1);
+        }
+    }
+    if (entry.rank != null) return entry.rank;
+    return null;
+}
+
 function enrichWarEntry(entry, source) {
     const rawEntry = { ...entry };
     if (entry.participants) {
@@ -293,6 +308,7 @@ function enrichWarEntry(entry, source) {
         rawEntry.participants = entry.participants.map(p => ({ ...p }));
         entry.participants = normalizeParticipants(entry.participants);
     }
+    entry.clanPlace = deriveClanPlace(entry);
     entry.rawEntry = rawEntry;
     entry.source = source;
     return entry;
@@ -522,7 +538,12 @@ function mergeWarLogs(primary, secondary) {
     const combinedMap = new Map();
     [...primary, ...secondary].forEach(entry => {
         const key = warLogEntryKey(entry);
-        if (!combinedMap.has(key)) combinedMap.set(key, entry);
+        if (!combinedMap.has(key)) {
+            combinedMap.set(key, entry);
+        } else {
+            const existing = combinedMap.get(key);
+            if (entry.clanPlace != null) existing.clanPlace = entry.clanPlace;
+        }
     });
     const combined = Array.from(combinedMap.values());
     combined.sort((a, b) => new Date(b.endDate || b.createdDate || 0) - new Date(a.endDate || a.createdDate || 0));
@@ -1122,6 +1143,61 @@ const server = http.createServer((req, res) => {
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ currentWar: enriched[0] || null }));
+            }
+        });
+        return;
+    }
+
+    if (pathname === '/api/bug-report' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+            const apiKey = process.env.RESEND_API_KEY || '';
+            const toEmail = process.env.BUG_REPORT_EMAIL || '';
+            const from = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
+            if (!apiKey || !toEmail) {
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Bug report not configured' }));
+                return;
+            }
+            let report = '';
+            try {
+                const parsed = JSON.parse(body || '{}');
+                report = typeof parsed.report === 'string' ? parsed.report.trim() : '';
+            } catch (_) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid body' }));
+                return;
+            }
+            if (!report) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Report is required' }));
+                return;
+            }
+            if (report.length > 50 * 1024) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Report too long' }));
+                return;
+            }
+            try {
+                const { Resend } = require('resend');
+                const resend = new Resend(apiKey);
+                const { data, error } = await resend.emails.send({
+                    from,
+                    to: [toEmail],
+                    subject: `[Gladiators] Bug report ${new Date().toISOString().slice(0, 19)}`,
+                    text: report,
+                });
+                if (error) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: error.message || 'Failed to send report' }));
+                    return;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, id: data?.id }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message || 'Failed to send report' }));
             }
         });
         return;

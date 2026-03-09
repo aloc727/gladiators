@@ -10,6 +10,8 @@
       gtag('consent', 'default', { 'analytics_storage': 'denied' });
       gtag('config', 'G-VLWQNRVDKG');
     </script>
+    <!-- Contentsquare (UX/behavior tracking) -->
+    <script src="https://t.contentsquare.net/uxa/dd580e9f2b8d9.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gladiators Clan War Stats</title>
@@ -186,8 +188,23 @@
 
         </main>
         <footer class="site-footer" role="contentinfo">
-            <span class="version-tag" id="uiVersion">UI v1.30.0</span>
+            <span class="version-tag" id="uiVersion">UI v1.31.0</span>
+            <button type="button" id="bugReportBtn" class="bug-report-btn" aria-label="Report a bug">Report bug</button>
         </footer>
+    </div>
+
+    <div id="bugReportModal" class="bug-report-modal" role="dialog" aria-labelledby="bugReportTitle" aria-modal="true" hidden>
+        <div class="bug-report-content">
+            <h2 id="bugReportTitle">Report a bug</h2>
+            <p class="bug-report-desc">Your report will include session info (URL, viewport, data state) to help us debug. Add a description below if you like.</p>
+            <label for="bugReportDescription">What went wrong? (optional)</label>
+            <textarea id="bugReportDescription" rows="3" placeholder="e.g. Current week column showed last week&#39;s numbers"></textarea>
+            <div class="bug-report-actions">
+                <button type="button" id="bugReportSubmit" class="bug-report-submit">Submit</button>
+                <button type="button" id="bugReportClose" class="bug-report-close">Close</button>
+            </div>
+            <p id="bugReportFeedback" class="bug-report-feedback" aria-live="polite"></p>
+        </div>
     </div>
 
     <div id="cookieConsent" class="cookie-consent" role="dialog" aria-label="Cookie consent" aria-describedby="cookieConsentDesc" style="display: none;">

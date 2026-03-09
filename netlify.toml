@@ -27,6 +27,11 @@
   to = "/.netlify/functions/analytics-auth"
   status = 200
 
+[[redirects]]
+  from = "/api/bug-report"
+  to = "/.netlify/functions/bug-report"
+  status = 200
+
 # SPA fallback: serve index.html for app routes so refresh works
 [[redirects]]
   from = "/summary"
