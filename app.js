@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.37.0';
+const UI_VERSION = 'v2.0.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Full table column type toggles
-    ['ftShowPoints', 'ftShowDecks', 'ftShowBoat', 'ftShowTrophies'].forEach(id => {
+    ['ftShowPoints', 'ftShowDecks', 'ftShowBoat'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', () => renderView());
     });
@@ -1549,7 +1549,6 @@ function renderFullTable() {
     const showP = document.getElementById('ftShowPoints')?.checked !== false;
     const showD = document.getElementById('ftShowDecks')?.checked !== false;
     const showB = document.getElementById('ftShowBoat')?.checked === true;
-    const showT = document.getElementById('ftShowTrophies')?.checked === true;
 
     head.innerHTML = '';
     body.innerHTML = '';
@@ -1562,7 +1561,6 @@ function renderFullTable() {
         if (showP) { const th = document.createElement('th'); th.className = 'ft-col ft-p'; th.textContent = label + ' (P)'; headerRow.appendChild(th); }
         if (showD) { const th = document.createElement('th'); th.className = 'ft-col ft-d'; th.textContent = label + ' (D)'; headerRow.appendChild(th); }
         if (showB) { const th = document.createElement('th'); th.className = 'ft-col ft-b'; th.textContent = label + ' (B)'; headerRow.appendChild(th); }
-        if (showT) { const th = document.createElement('th'); th.className = 'ft-col ft-t'; th.textContent = label + ' (T)'; headerRow.appendChild(th); }
     });
     head.appendChild(headerRow);
 
@@ -1602,13 +1600,6 @@ function renderFullTable() {
             if (showB) {
                 const cell = document.createElement('td');
                 const v = player.boatAttacks?.[column.label];
-                cell.textContent = v != null ? v : '—';
-                if (v == null) cell.classList.add('score-na');
-                row.appendChild(cell);
-            }
-            if (showT) {
-                const cell = document.createElement('td');
-                const v = player.trophies?.[column.label];
                 cell.textContent = v != null ? v : '—';
                 if (v == null) cell.classList.add('score-na');
                 row.appendChild(cell);
@@ -1663,24 +1654,25 @@ function renderStrategyTab() {
     const topEfficiency = efficiencyList.slice(0, 8);
 
     const participationByWeek = columns.slice(0, 12).map(col => {
-        const count = players.filter(p => p.scores[col.label] != null).length;
+        const count = players.filter(p => {
+            const s = p.scores[col.label];
+            return s != null && s > 0;
+        }).length;
         const total = getWeekMemberCount(col.war?.seasonId, col.war?.periodIndex) ?? players.length;
-        return { label: (col.displayLabel || col.label).split('(')[0].trim(), count, total };
+        const rawLabel = (col.displayLabel || col.label).split('(')[0].trim();
+        const label = rawLabel.replace(/^Current Week - \s*/i, '');
+        return { label, count, total };
     }).reverse();
 
-    // Weekly boat attacks and war place (clanPlace from API when available)
     const boatByWeek = columns.slice(0, 12).map(col => {
         let boat = 0;
         players.forEach(p => {
             const v = p.boatAttacks?.[col.label];
             if (v != null) boat += v;
         });
-        const place = col.war?.clanPlace;
-        return {
-            label: (col.displayLabel || col.label).split('(')[0].trim(),
-            boat,
-            place: place != null ? place : null
-        };
+        const rawLabel = (col.displayLabel || col.label).split('(')[0].trim();
+        const label = rawLabel.replace(/^Current Week - \s*/i, '');
+        return { label, boat };
     }).reverse();
 
     const totalDonations = players.reduce((sum, p) => sum + (p.donations || 0), 0);
@@ -1691,26 +1683,50 @@ function renderStrategyTab() {
         .sort((a, b) => b.donations - a.donations)
         .slice(0, 10);
 
+    const maxDonation = donorList[0]?.donations || 1;
+    const maxPpd = topEfficiency[0]?.ppd || 1;
     container.innerHTML = `
         <div class="strategy-section">
             <h2>Strategy &amp; insights</h2>
             <p class="strategy-lead">Using war points and decks used we can see efficiency and participation. The API does not report win/loss per battle—only total points and number of battles (decks used).</p>
         </div>
-        <div class="strategy-section">
+        <div class="strategy-section infographic-donations">
             <h3>Donations</h3>
-            <p>Clan total: <strong>${formatNumber(totalDonations)}</strong> given, <strong>${formatNumber(totalDonationsReceived)}</strong> received (current members).</p>
-            ${donorList.length ? `<ul class="strategy-list"><li>Top donors: ${donorList.map(d => `${escapeHtml(d.name)} (${formatNumber(d.donations)})`).join(', ')}</li></ul>` : '<p class="muted">No donation data this period.</p>'}
+            <div class="infographic-stats-row">
+                <div class="infographic-stat-card infographic-given">
+                    <span class="infographic-stat-value">${formatNumber(totalDonations)}</span>
+                    <span class="infographic-stat-label">Given</span>
+                </div>
+                <div class="infographic-stat-card infographic-received">
+                    <span class="infographic-stat-value">${formatNumber(totalDonationsReceived)}</span>
+                    <span class="infographic-stat-label">Received</span>
+                </div>
+            </div>
+            ${donorList.length ? `
+            <p class="infographic-sub">Top donors</p>
+            <div class="infographic-bars">
+                ${donorList.map(d => {
+                    const pct = maxDonation ? Math.min(100, Math.round((d.donations / maxDonation) * 100)) : 0;
+                    return `<div class="infographic-bar-row"><span class="infographic-bar-name">${escapeHtml(d.name)}</span><div class="infographic-bar-wrap"><div class="infographic-bar" style="width:${pct}%"></div><span class="infographic-bar-value">${formatNumber(d.donations)}</span></div></div>`;
+                }).join('')}
+            </div>` : '<p class="muted">No donation data this period.</p>'}
         </div>
-        <div class="strategy-section">
+        <div class="strategy-section infographic-efficiency">
             <h3>Points per deck (efficiency)</h3>
-            <p>Higher = more war points per battle. Clan average: <strong>${pointsPerDeck}</strong> pts/deck.</p>
-            <ul class="strategy-list">
-                ${topEfficiency.length ? topEfficiency.map((e, i) => `<li><strong>${escapeHtml(e.name)}</strong>: ${e.ppd.toFixed(1)} pts/deck (${formatNumber(e.totalPoints)} pts, ${e.totalDecks} decks)</li>`).join('') : '<li class="muted">No data yet.</li>'}
-            </ul>
+            <p class="infographic-sub">Higher = more war points per battle. Clan average: <strong>${pointsPerDeck}</strong> pts/deck.</p>
+            <div class="infographic-hero-number">${pointsPerDeck}</div>
+            <p class="infographic-hero-label">clan avg pts/deck</p>
+            ${topEfficiency.length ? `
+            <div class="infographic-bars">
+                ${topEfficiency.map(e => {
+                    const pct = maxPpd ? Math.min(100, Math.round((e.ppd / maxPpd) * 100)) : 0;
+                    return `<div class="infographic-bar-row"><span class="infographic-bar-name">${escapeHtml(e.name)}</span><div class="infographic-bar-wrap"><div class="infographic-bar infographic-bar-eff" style="width:${pct}%"></div><span class="infographic-bar-value">${e.ppd.toFixed(1)}</span></div></div>`;
+                }).join('')}
+            </div>` : '<p class="muted">No data yet.</p>'}
         </div>
         <div class="strategy-section">
             <h3>Participation by week</h3>
-            <p>Number of members who participated (any points) in each of the last 12 weeks.</p>
+            <p>Number of members who participated (points &gt; 0) in each of the last 12 weeks.</p>
             <div class="participation-bars">
                 ${participationByWeek.map(p => {
                     const pct = p.total ? Math.round((p.count / p.total) * 100) : 0;
@@ -1720,19 +1736,19 @@ function renderStrategyTab() {
         </div>
         <div class="strategy-section">
             <h3>Boat attacks by week</h3>
-            <p>Total boat attacks per week and war place (when the API provides it). Boat attacks help the clan boat; battles earn war points.</p>
+            <p>Total boat attacks per week. Boat attacks help the clan boat; battles earn war points.</p>
             <div class="strategy-table-wrap">
-                <table class="strategy-table" aria-label="Boat attacks and war place by week">
-                    <thead><tr><th>Week</th><th>Boat attacks</th><th>Place</th></tr></thead>
+                <table class="strategy-table" aria-label="Boat attacks by week">
+                    <thead><tr><th>Week</th><th>Boat attacks</th></tr></thead>
                     <tbody>
-                        ${boatByWeek.map(w => `<tr><td>${escapeHtml(w.label)}</td><td>${formatNumber(w.boat)}</td><td>${w.place != null ? '#' + w.place : '—'}</td></tr>`).join('')}
+                        ${boatByWeek.map(w => `<tr><td>${escapeHtml(w.label)}</td><td>${formatNumber(w.boat)}</td></tr>`).join('')}
                     </tbody>
                 </table>
             </div>
         </div>
         <div class="strategy-section strategy-note">
             <h3>About the data</h3>
-            <p><strong>Battles</strong> = decks used (each deck use is one battle). <strong>Wins/losses</strong> are not reported by the API—only total war points and battle count. Donations are from the clan members API. War place is shown when the API returns standings for a week.</p>
+            <p><strong>Battles</strong> = decks used (each deck use is one battle). <strong>Wins/losses</strong> are not reported by the API—only total war points and battle count. Donations are from the clan members API.</p>
         </div>
     `;
 }
@@ -1888,7 +1904,6 @@ function downloadFullTableCsv() {
     const showP = document.getElementById('ftShowPoints')?.checked !== false;
     const showD = document.getElementById('ftShowDecks')?.checked !== false;
     const showB = document.getElementById('ftShowBoat')?.checked === true;
-    const showT = document.getElementById('ftShowTrophies')?.checked === true;
     const columns = getVisibleColumns(latestData.columns, fullTableRange);
     const players = latestData.players.filter(p => (currentMembersOnly ? p.isCurrent : true));
     const headerCells = ['Player Name', 'Tag', 'Role'];
@@ -1897,7 +1912,6 @@ function downloadFullTableCsv() {
         if (showP) headerCells.push(label + ' (P)');
         if (showD) headerCells.push(label + ' (D)');
         if (showB) headerCells.push(label + ' (B)');
-        if (showT) headerCells.push(label + ' (T)');
     });
     const rows = [headerCells.map(escapeCsvCell).join(',')];
     players.forEach(player => {
@@ -1906,7 +1920,6 @@ function downloadFullTableCsv() {
             if (showP) row.push(player.scores[col.label] != null ? player.scores[col.label] : '');
             if (showD) row.push(player.decksUsed?.[col.label] != null ? player.decksUsed[col.label] : '');
             if (showB) row.push(player.boatAttacks?.[col.label] != null ? player.boatAttacks[col.label] : '');
-            if (showT) row.push(player.trophies?.[col.label] != null ? player.trophies[col.label] : '');
         });
         rows.push(row.map(escapeCsvCell).join(','));
     });
@@ -2235,17 +2248,22 @@ function renderDashboard() {
     const strategyEl = document.getElementById('strategyBoard');
 
     const allColumns = latestData.columns;
-    const currentColumn = allColumns[0];
+    // Snapshot and momentum use last completed week until the new week starts (same as demotion/promotion).
+    const snapshotColumn = (allColumns[0] && allColumns[0].isCurrentWeek && allColumns.length > 1)
+        ? allColumns[1]
+        : allColumns[0];
+    const currentColumn = snapshotColumn;
     const players = latestData.players.filter(player => currentMembersOnly ? player.isCurrent : true);
 
     const currentScores = players.map(player => ({
         name: player.name,
         role: player.role,
-        score: player.scores[currentColumn.label],
-        decks: player.decksUsed[currentColumn.label]
+        score: player.scores[currentColumn?.label],
+        decks: player.decksUsed[currentColumn?.label]
     }));
 
-    const participants = currentScores.filter(item => item.score !== null && item.score !== undefined);
+    // 0 does not count as participation in the War.
+    const participants = currentScores.filter(item => item.score != null && item.score > 0);
     const totalPoints = participants.reduce((sum, item) => sum + item.score, 0);
     const avgPoints = participants.length ? Math.round(totalPoints / participants.length) : 0;
     const totalDecks = participants.reduce((sum, item) => sum + (item.decks || 0), 0);
@@ -2291,7 +2309,11 @@ function renderDashboard() {
             maxAtRisk
         };
     });
-    const topOnTrack = streakData.filter(s => s.maxOnTrack > 0).sort((a, b) => b.maxOnTrack - a.maxOnTrack).slice(0, 6);
+    // Longest on track: include everyone with the highest weeks (all ties); if no tie, show up to ~10.
+    const sortedOnTrack = streakData.filter(s => s.maxOnTrack > 0).sort((a, b) => b.maxOnTrack - a.maxOnTrack);
+    const maxWeeks = sortedOnTrack[0]?.maxOnTrack ?? 0;
+    const tiedAtMax = sortedOnTrack.filter(s => s.maxOnTrack === maxWeeks);
+    const topOnTrack = tiedAtMax.length > 1 ? tiedAtMax : sortedOnTrack.slice(0, 10);
     const atRiskNow = streakData.filter(s => s.currentAtRisk > 0).sort((a, b) => b.currentAtRisk - a.currentAtRisk).slice(0, 6);
 
     const streaksEl = document.getElementById('streaksCard');
@@ -2335,6 +2357,7 @@ function renderDashboard() {
     const recentPromotionsMap = new Map();
     const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
     const twelveWeeksAgo = Date.now() - 12 * 7 * 24 * 60 * 60 * 1000;
+    const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
     (promotionsData.recent || []).forEach(p => {
         const at = new Date(p.promotedAt).getTime();
         if (at >= ninetyDaysAgo) recentPromotionsMap.set(p.tag, p);
@@ -2370,7 +2393,7 @@ function renderDashboard() {
 
     const recentPromotionsEl = document.getElementById('recentPromotionsCard');
     if (recentPromotionsEl) {
-        const recent = (promotionsData.recent || []).slice(0, 8);
+        const recent = (promotionsData.recent || []).filter(p => new Date(p.promotedAt).getTime() >= oneYearAgo).slice(0, 24);
         recentPromotionsEl.innerHTML = `
             <h3>Recent Promotions</h3>
             <ul class="list">

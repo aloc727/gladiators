@@ -1430,6 +1430,97 @@ body.cookie-consent-pending .cookie-consent {
 }
 .strategy-table tbody tr:hover { background: #f8fafc; }
 
+/* Strategy infographics: Donations & Efficiency */
+.infographic-donations .infographic-stats-row,
+.infographic-efficiency .infographic-stats-row {
+    display: flex;
+    gap: 1.5rem;
+    margin: 1rem 0;
+}
+.infographic-stat-card {
+    flex: 1;
+    text-align: center;
+    padding: 1.25rem 1rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.infographic-stat-card.infographic-given {
+    background: linear-gradient(145deg, #dbeafe 0%, #93c5fd 100%);
+    border: 1px solid #60a5fa;
+}
+.infographic-stat-card.infographic-received {
+    background: linear-gradient(145deg, #d1fae5 0%, #6ee7b7 100%);
+    border: 1px solid #34d399;
+}
+.infographic-stat-value {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+.infographic-stat-card.infographic-given .infographic-stat-value { color: #1e40af; }
+.infographic-stat-card.infographic-received .infographic-stat-value { color: #047857; }
+.infographic-stat-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569;
+    margin-top: 0.25rem;
+    display: block;
+}
+.infographic-sub { color: #64748b; font-size: 0.9rem; margin: 0.75rem 0 0.5rem; }
+.infographic-bars { margin-top: 0.75rem; }
+.infographic-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+.infographic-bar-name { min-width: 100px; color: #334155; font-weight: 500; }
+.infographic-bar-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    position: relative;
+}
+.infographic-bar {
+    height: 22px;
+    min-width: 4px;
+    background: linear-gradient(90deg, #2c54c7 0%, #3b82f6 100%);
+    border-radius: 6px;
+    transition: width 0.35s ease-out;
+}
+.infographic-bar-eff {
+    background: linear-gradient(90deg, #059669 0%, #10b981 100%);
+}
+.infographic-bar-value {
+    min-width: 4rem;
+    text-align: right;
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.9rem;
+}
+.infographic-efficiency .infographic-hero-number {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #059669;
+    text-align: center;
+    margin: 0.5rem 0 0.25rem;
+    letter-spacing: -0.03em;
+    text-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
+}
+.infographic-hero-label {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 1rem;
+}
+
 /* Full table */
 .full-table-controls { margin-bottom: 1rem; }
 .full-table-intro { color: #4b5563; font-size: 0.9rem; margin-bottom: 0.5rem; }
@@ -1449,7 +1540,6 @@ body.cookie-consent-pending .cookie-consent {
 .table-container-full thead th.ft-p { background: #1e3a5f; }
 .table-container-full thead th.ft-d { background: #1a3352; }
 .table-container-full thead th.ft-b { background: #162a47; }
-.table-container-full thead th.ft-t { background: #12223d; }
 .table-container-full .ft-col { font-size: 0.85rem; padding: 6px 8px; white-space: nowrap; }
 
 /* Streaks card */
