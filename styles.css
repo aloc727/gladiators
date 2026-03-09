@@ -1518,7 +1518,53 @@ body.cookie-consent-pending .cookie-consent {
 .participation-heatmap {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+}
+.participation-heatmap-wide {
+    width: 100%;
+    max-width: 100%;
+}
+.participation-heatmap-wide .heatmap-season-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.75rem;
+    min-height: 48px;
+}
+.participation-heatmap-wide .heatmap-season-label {
+    min-width: 5.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #334155;
+    display: flex;
+    align-items: center;
+}
+.participation-heatmap-wide .heatmap-cells {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: stretch;
+}
+.participation-heatmap-wide .heatmap-cell {
+    flex: 1;
+    min-width: 56px;
+    max-width: 120px;
+    height: auto;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0f172a;
+    border-radius: 6px;
+    cursor: default;
+    background: linear-gradient(90deg, #1e3a8a 0%, #1e3a8a calc(var(--pct, 0) * 1%), #e2e8f0 calc(var(--pct, 0) * 1%));
+    transition: filter 0.15s ease;
+}
+.participation-heatmap-wide .heatmap-cell:hover {
+    filter: brightness(1.08);
 }
 .heatmap-season-row {
     display: flex;
@@ -2009,7 +2055,7 @@ body.cookie-consent-pending .cookie-consent {
     .donation-economy-grid { grid-template-columns: 1fr; }
 }
 
-/* Efficiency: gauge, delta list, PPD distribution */
+/* Efficiency: gauge (temperature-style arc), delta list, PPD distribution */
 .efficiency-gauge-wrap {
     margin: 1rem 0;
     padding: 1rem;
@@ -2019,40 +2065,38 @@ body.cookie-consent-pending .cookie-consent {
 }
 .efficiency-gauge {
     position: relative;
-    width: 200px;
-    height: 110px;
+    width: 220px;
     margin: 0 auto 0.5rem;
 }
-.efficiency-gauge-track {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    top: 0;
-    height: 60px;
-    border-radius: 100px 100px 0 0;
-    overflow: hidden;
-    background: #e2e8f0;
+.efficiency-gauge-temp {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
-.efficiency-gauge-zone {
-    position: absolute;
-    top: 0;
-    height: 100%;
-    border-radius: 100px 100px 0 0;
+.efficiency-gauge-arc-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 220px;
 }
-.efficiency-gauge-red   { left: 0;   width: 33.33%; background: #dc2626; }
-.efficiency-gauge-yellow { left: 33.33%; width: 33.33%; background: #eab308; }
-.efficiency-gauge-green { left: 66.66%; width: 33.34%; background: #16a34a; }
-.efficiency-gauge-needle {
+.efficiency-gauge-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.efficiency-gauge-track-arc {
+    stroke: #e2e8f0;
+}
+.efficiency-gauge-fill-arc {
+    stroke: #0d9488;
+    transition: stroke-dashoffset 0.4s ease;
+}
+.efficiency-gauge-value-center {
     position: absolute;
     left: 50%;
-    bottom: 8px;
-    width: 3px;
-    height: 52px;
-    background: #0f172a;
-    border-radius: 2px;
-    transform-origin: 50% 100%;
-    transform: rotate(calc(-90deg + var(--gauge-value, 0) * 1.8deg));
-    transition: transform 0.3s ease;
+    top: 50%;
+    transform: translate(-50%, -20%);
+    margin: 0;
+    font-size: 1.75rem;
 }
 .efficiency-gauge-value {
     font-size: 1.5rem;

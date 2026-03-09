@@ -1777,10 +1777,15 @@ function renderStrategyTabContent(container) {
         ? participationWithPct.reduce((a, w) => (w.pct < a.pct ? w : a), participationWithPct[0])
         : null;
 
+    const allowedSeasonWeeks = new Set(['127-4','127-5','128-1','128-2','128-3','128-4','129-1','129-2','129-3','129-4','130-1','130-2']);
+    const participationByWeekFiltered = participationByWeek.filter(w => {
+        if (w.seasonId == null || w.periodIndex == null) return false;
+        return allowedSeasonWeeks.has(`${w.seasonId}-${w.periodIndex}`);
+    });
     const participationBySeason = [];
     const seasonMap = new Map();
-    participationByWeek.forEach(w => {
-        const sid = w.seasonId != null ? String(w.seasonId) : '?';
+    participationByWeekFiltered.forEach(w => {
+        const sid = String(w.seasonId);
         if (!seasonMap.has(sid)) seasonMap.set(sid, []);
         seasonMap.get(sid).push(w);
     });
@@ -1974,14 +1979,14 @@ function renderStrategyTabContent(container) {
             <h3>Contribution Efficiency</h3>
             <p class="infographic-sub">Points per deck (war points ÷ decks used). Higher = more impact per battle.</p>
             <div class="efficiency-gauge-wrap">
-                <div class="efficiency-gauge" role="img" aria-label="Clan average efficiency gauge">
-                    <div class="efficiency-gauge-track">
-                        <div class="efficiency-gauge-zone efficiency-gauge-red"></div>
-                        <div class="efficiency-gauge-zone efficiency-gauge-yellow"></div>
-                        <div class="efficiency-gauge-zone efficiency-gauge-green"></div>
+                <div class="efficiency-gauge efficiency-gauge-temp" role="img" aria-label="Clan average efficiency gauge">
+                    <div class="efficiency-gauge-arc-wrap">
+                        <svg class="efficiency-gauge-svg" viewBox="0 0 200 100" preserveAspectRatio="xMidYMin meet">
+                            <path class="efficiency-gauge-track-arc" d="M 20 85 A 80 80 0 0 1 180 85" fill="none" stroke-width="10" stroke-linecap="round"/>
+                            <path class="efficiency-gauge-fill-arc" d="M 20 85 A 80 80 0 0 1 180 85" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="${Math.PI * 80}" stroke-dashoffset="${Math.PI * 80 * (1 - Math.min(1, Math.max(0, ((parseFloat(pointsPerDeck) || 0) - 140) / 50)))}"/>
+                        </svg>
+                        <div class="efficiency-gauge-value efficiency-gauge-value-center">${pointsPerDeck}</div>
                     </div>
-                    <div class="efficiency-gauge-needle" style="--gauge-value:${Math.min(100, Math.max(0, ((parseFloat(pointsPerDeck) || 0) - 140) / 50 * 100))}"></div>
-                    <div class="efficiency-gauge-value">${pointsPerDeck}</div>
                     <div class="efficiency-gauge-label">Clan avg pts/deck</div>
                     <div class="efficiency-gauge-scale"><span>140</span><span>150</span><span>160</span><span>170</span><span>180</span><span>190</span></div>
                 </div>
@@ -1991,7 +1996,7 @@ function renderStrategyTabContent(container) {
                 ${(() => {
                     const avg = parseFloat(pointsPerDeck) || 0;
                     const deltas = efficiencyList.map(e => ({ name: e.name, ppd: e.ppd, delta: e.ppd - avg })).sort((a, b) => b.delta - a.delta);
-                    return deltas.slice(0, 12).map(d => `<div class="efficiency-delta-row"><span class="efficiency-delta-name">${escapeHtml(d.name)}</span><span class="efficiency-delta-value${d.delta < 0 ? ' efficiency-delta-neg' : ''}">${d.delta >= 0 ? '+' : ''}${d.delta.toFixed(1)}</span></div>`).join('');
+                    return deltas.map(d => `<div class="efficiency-delta-row" title="pts/deck: ${d.ppd.toFixed(1)} · delta: ${d.delta >= 0 ? '+' : ''}${d.delta.toFixed(1)}"><span class="efficiency-delta-name">${escapeHtml(d.name)}</span><span class="efficiency-delta-value${d.delta < 0 ? ' efficiency-delta-neg' : ''}">${d.delta >= 0 ? '+' : ''}${d.delta.toFixed(1)}</span></div>`).join('');
                 })()}
             </div>
             <h4 class="efficiency-ppd-dist-title">Points per deck distribution</h4>
@@ -2037,7 +2042,7 @@ function renderStrategyTabContent(container) {
             </div>
             <div class="participation-heatmap-wrap">
                 <h4 class="participation-subtitle">Participation heatmap</h4>
-                <div class="participation-heatmap" role="img" aria-label="Participation rate by season and week">
+                <div class="participation-heatmap participation-heatmap-wide" role="img" aria-label="Participation rate by season and week">
                     ${participationBySeason.map(seg => `
                         <div class="heatmap-season-row">
                             <span class="heatmap-season-label">Season ${escapeHtml(seg.seasonId)}</span>
@@ -2045,7 +2050,8 @@ function renderStrategyTabContent(container) {
                                 ${seg.weeks.map(w => {
                                     const pct = w.total ? (w.count / w.total) * 100 : 0;
                                     const intensity = Math.min(100, Math.round(pct));
-                                    return `<span class="heatmap-cell" style="--pct:${intensity}" title="${escapeHtml(w.label)}: ${w.count}/${w.total} (${Math.round(pct)}%)">${w.periodIndex ?? '?'}</span>`;
+                                    const hoverText = `Season ${seg.seasonId} Week ${w.periodIndex ?? ''} · ${w.count}/${w.total} participated (${Math.round(pct)}%)`;
+                                    return `<span class="heatmap-cell" style="--pct:${intensity}" title="${escapeHtml(hoverText)}">${w.periodIndex ?? ''}</span>`;
                                 }).join('')}
                             </div>
                         </div>
