@@ -1154,7 +1154,7 @@ const server = http.createServer((req, res) => {
         req.on('end', async () => {
             const apiKey = process.env.RESEND_API_KEY || '';
             const toEmail = process.env.BUG_REPORT_EMAIL || '';
-            const from = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
+            const fromAddress = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
             if (!apiKey || !toEmail) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Bug report not configured' }));
@@ -1183,7 +1183,7 @@ const server = http.createServer((req, res) => {
                 const { Resend } = require('resend');
                 const resend = new Resend(apiKey);
                 const { data, error } = await resend.emails.send({
-                    from,
+                    from: fromAddress,
                     to: [toEmail],
                     subject: `[Gladiators] Bug report ${new Date().toISOString().slice(0, 19)}`,
                     text: report,
