@@ -330,8 +330,8 @@ async function loadData() {
             }))
             .catch(() => ({ lastPromoted: null, recent: [], lastDemoted: null, recentDemotions: [] }));
 
-        // Process data
-        const processedData = processWarData(members, warLog);
+        // Process data (hasCurrentWeek: first column is live current week from API)
+        const processedData = processWarData(members, warLog, { hasCurrentWeek: !!currentWar });
         processedData.promotions = promotions;
 
         // Debug: Log data summary
@@ -461,6 +461,11 @@ function getSeasonWeekLabel(war) {
     if (war.label && war.label.includes('Season')) {
         return war.label.replace(/\s*\(.*\)$/, '');
     }
+    // Fallback: label from end date so every column has a clear header
+    const endDate = war.endDateObj || (war.endDate ? new Date(war.endDate) : null);
+    if (endDate && !isNaN(endDate.getTime())) {
+        return `Week of ${formatWarDate(endDate.toISOString())}`;
+    }
     return '';
 }
 
@@ -513,7 +518,8 @@ function getWarEndDate(war) {
     return endMonday;
 }
 
-function processWarData(members, warLog) {
+function processWarData(members, warLog, options = {}) {
+    const { hasCurrentWeek = false } = options;
     const now = new Date();
 
     // Create a map of all players
@@ -773,8 +779,9 @@ function processWarData(members, warLog) {
         const seasonPeriodLabel = seasonInfo && periodInfo ? `${seasonInfo}${periodInfo}` : seasonInfo || '';
         const debugTooltip = war.id ? `ID:${war.id}${seasonPeriodLabel ? `, ${seasonPeriodLabel}` : ''}` : (seasonPeriodLabel || '');
 
+        // Only call the first column "Current Week" when we actually have live current-week data from the API
         let displayLabel;
-        if (index === 0) {
+        if (index === 0 && hasCurrentWeek) {
             displayLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
         } else {
             displayLabel = seasonWeek ? `${seasonWeek} (${range})` : range;
@@ -2122,10 +2129,13 @@ function renderDashboard() {
         
         demotionList.push(...membersElders);
         
-        // Co-leaders: (1) 0 points for 12 consecutive weeks, or (2) 12-week rolling average below 1600
-        const coLeaderCandidates = players.filter(p => p.isCurrent && (p.role || '').toLowerCase() === 'coleader');
+        // Leaders and co-leaders: (1) 0 points for 12 consecutive weeks, or (2) 12-week rolling average below 1600
+        const leaderCoLeaderCandidates = players.filter(p => {
+            const role = (p.role || '').toLowerCase();
+            return p.isCurrent && (role === 'leader' || role === 'coleader');
+        });
         const streakColumns = allColumns.slice(0, 12);
-        for (const player of coLeaderCandidates) {
+        for (const player of leaderCoLeaderCandidates) {
             if (streakColumns.length < 12) continue;
             let consecutiveZeros = 0;
             const scoresForAvg = [];
@@ -2220,7 +2230,7 @@ function renderDashboard() {
         }
         
         demotionEl.innerHTML = `
-            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week. Co-leaders: 0 for 12 straight weeks, or 12-week rolling average below 1600.">?</span></h3>
+            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week. Leaders and co-leaders: 0 for 12 straight weeks, or 12-week rolling average below 1600.">?</span></h3>
             <ul class="list">
                 ${demotionMessage}
             </ul>

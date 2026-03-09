@@ -1,4 +1,4 @@
-const { CLAN_TAG, apiRequest, convertRiverRaceToWarLog } = require('./_clash-api');
+const { CLAN_TAG, apiRequest, convertRiverRaceToWarLogLegacy } = require('./_clash-api');
 
 exports.handler = async () => {
   try {
@@ -20,7 +20,7 @@ exports.handler = async () => {
     if (isWarLogDisabled) {
       try {
         const riverRace = await apiRequest(`/v1/clans/%23${CLAN_TAG}/currentriverrace`);
-        const warLog = convertRiverRaceToWarLog(riverRace);
+        const warLog = convertRiverRaceToWarLogLegacy(riverRace);
         return {
           statusCode: 200,
           headers: {

@@ -102,6 +102,6 @@ This project is ready for Netlify:
 - Set environment variables in Netlify:
   - `CLASH_ROYALE_API_KEY`
   - `CLAN_TAG` (optional)
-  - `ANALYTICS_PASSWORD` and `ANALYTICS_SESSION_SECRET` (for the password-protected analytics page; see `.env.example`)
+  - `ANALYTICS_PASSWORD` and `ANALYTICS_SESSION_SECRET` (for the password-protected analytics page; see **ANALYTICS_SETUP.md** for exact steps)
 
 See `DEPLOYMENT.md` for full steps and DNS setup with Namecheap.

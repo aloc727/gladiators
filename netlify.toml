@@ -13,6 +13,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/clan/current-war"
+  to = "/.netlify/functions/current-war"
+  status = 200
+
+[[redirects]]
   from = "/api/analytics-check"
   to = "/.netlify/functions/analytics-check"
   status = 200

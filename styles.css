@@ -295,7 +295,7 @@ th.sortable.week-header {
 }
 
 th.sortable:hover {
-    background: rgba(255, 255, 255, 0.1);
+    /* Tooltip only; no color change so cell content stays readable */
 }
 
 th.sortable::after {
@@ -1165,7 +1165,7 @@ td:not(:first-child) {
     }
 }
 
-/* Cookie consent banner */
+/* Cookie consent banner: prominent, visible without scrolling (body direct child so fixed works) */
 .cookie-consent {
     position: fixed;
     bottom: 0;
@@ -1173,19 +1173,22 @@ td:not(:first-child) {
     right: 0;
     background: #1e293b;
     color: #e2e8f0;
-    padding: 14px 20px;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
-    z-index: 9999;
+    padding: 16px 20px;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
+    z-index: 99999;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     justify-content: center;
+    border-top: 3px solid #2c54c7;
+    font-size: 0.95rem;
 }
 .cookie-consent p {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: inherit;
     max-width: 560px;
+    font-weight: 500;
 }
 .cookie-consent-actions {
     display: flex;
@@ -1193,10 +1196,10 @@ td:not(:first-child) {
     flex-shrink: 0;
 }
 .cookie-btn {
-    padding: 8px 16px;
+    padding: 10px 18px;
     border: none;
     border-radius: 6px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     cursor: pointer;
     font-weight: 500;
 }
@@ -1215,14 +1218,21 @@ td:not(:first-child) {
     background: #64748b;
 }
 
-/* Blur main content until cookie consent */
-body.cookie-consent-pending .container {
-    filter: blur(6px);
-    pointer-events: none;
-    user-select: none;
+/* On mobile: show banner at top so it’s seen immediately without scrolling */
+@media (max-width: 768px) {
+    .cookie-consent {
+        top: 0;
+        bottom: auto;
+        border-top: none;
+        border-bottom: 3px solid #2c54c7;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+        padding: 14px 16px;
+        gap: 12px;
+    }
 }
+
 body.cookie-consent-pending .cookie-consent {
-    pointer-events: auto;
+    /* No blur; banner is prominent and always visible */
 }
 
 /* Full Table password gate */
