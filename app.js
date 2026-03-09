@@ -65,9 +65,6 @@ function initCookieConsent() {
     });
 }
 
-// Full Table: same password pattern as analytics page (change to match your analytics password if desired)
-const FULL_TABLE_UNLOCK_KEY = 'gladiators_fulltable_ok';
-const FULL_TABLE_PASSWORD = 'gladiators-fulltable';
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
@@ -1267,42 +1264,7 @@ function sortTable(column, headerElement, forceDirection = null) {
 
 function renderFullTableIfActive() {
     if (currentTab !== 'fulltable') return;
-    const gateEl = document.getElementById('fullTableGate');
-    const contentEl = document.getElementById('fullTableContent');
-    if (!gateEl || !contentEl) return;
-    const unlocked = sessionStorage.getItem(FULL_TABLE_UNLOCK_KEY);
-    if (unlocked) {
-        gateEl.style.display = 'none';
-        contentEl.style.display = 'block';
-        if (latestData) renderFullTable();
-        return;
-    }
-    contentEl.style.display = 'none';
-    gateEl.style.display = 'block';
-    gateEl.innerHTML = `
-        <div class="full-table-gate-inner">
-            <h3>Full Table</h3>
-            <p class="full-table-gate-text">Enter the password to view the full war table (points, decks, boat attacks).</p>
-            <input type="password" id="fullTablePassword" placeholder="Password" autocomplete="off" aria-label="Full Table password">
-            <button type="button" id="fullTableSubmit">Continue</button>
-            <p class="full-table-gate-error" id="fullTableGateError" role="alert"></p>
-        </div>
-    `;
-    const errEl = document.getElementById('fullTableGateError');
-    document.getElementById('fullTableSubmit')?.addEventListener('click', () => {
-        const input = document.getElementById('fullTablePassword');
-        if (!input) return;
-        errEl.textContent = '';
-        if (input.value === FULL_TABLE_PASSWORD) {
-            sessionStorage.setItem(FULL_TABLE_UNLOCK_KEY, '1');
-            renderFullTableIfActive();
-        } else {
-            errEl.textContent = 'Incorrect password.';
-        }
-    });
-    document.getElementById('fullTablePassword')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('fullTableSubmit')?.click();
-    });
+    if (latestData) renderFullTable();
 }
 
 function renderFullTable() {
