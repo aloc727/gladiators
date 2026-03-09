@@ -11,3 +11,31 @@
   from = "/api/clan/warlog"
   to = "/.netlify/functions/clan-warlog"
   status = 200
+
+[[redirects]]
+  from = "/api/analytics-check"
+  to = "/.netlify/functions/analytics-check"
+  status = 200
+
+[[redirects]]
+  from = "/api/analytics-auth"
+  to = "/.netlify/functions/analytics-auth"
+  status = 200
+
+# SPA fallback: serve index.html for app routes so refresh works
+[[redirects]]
+  from = "/summary"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/players"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/full-table"
+  to = "/index.html"
+  status = 200
+[[redirects]]
+  from = "/strategy"
+  to = "/index.html"
+  status = 200

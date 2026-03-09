@@ -35,31 +35,46 @@
     </div>
     <script>
         (function () {
-            // Change this to your own password (client-side only – for keeping casual visitors out).
-            var EXPECTED_PASSWORD = 'gladiators-analytics';
             var loginBox = document.getElementById('loginBox');
             var dashboardBox = document.getElementById('dashboardBox');
             var input = document.getElementById('analyticsPassword');
             var submit = document.getElementById('analyticsSubmit');
             var errEl = document.getElementById('analyticsError');
-            var sessionKey = 'gladiators_analytics_ok';
-            if (sessionStorage.getItem(sessionKey)) {
-                loginBox.style.display = 'none';
-                dashboardBox.style.display = 'block';
-                return;
-            }
+
             function showDashboard() {
-                sessionStorage.setItem(sessionKey, '1');
                 loginBox.style.display = 'none';
                 dashboardBox.style.display = 'block';
             }
+
+            function showLogin() {
+                loginBox.style.display = 'block';
+                dashboardBox.style.display = 'none';
+            }
+
+            fetch('/api/analytics-check', { credentials: 'include' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data && data.ok) showDashboard();
+                    else showLogin();
+                })
+                .catch(function () { showLogin(); });
+
             submit.addEventListener('click', function () {
                 errEl.textContent = '';
-                if (input.value === EXPECTED_PASSWORD) {
-                    showDashboard();
-                } else {
-                    errEl.textContent = 'Incorrect password.';
-                }
+                var pwd = input.value;
+                if (!pwd) { errEl.textContent = 'Enter the password.'; return; }
+                fetch('/api/analytics-auth', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pwd })
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data && data.ok) showDashboard();
+                        else errEl.textContent = 'Incorrect password.';
+                    })
+                    .catch(function () { errEl.textContent = 'Request failed.'; });
             });
             input.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter') submit.click();

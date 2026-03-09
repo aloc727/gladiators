@@ -1015,6 +1015,42 @@ const server = http.createServer((req, res) => {
     }
     
     // API endpoints
+    // Analytics auth: password from env, session cookie (no password in client)
+    const ANALYTICS_PASSWORD = process.env.ANALYTICS_PASSWORD || '';
+    const ANALYTICS_SESSION_SECRET = process.env.ANALYTICS_SESSION_SECRET || '';
+    const ANALYTICS_COOKIE_NAME = 'gladiators_analytics';
+
+    if (pathname === '/api/analytics-check') {
+        const cookieHeader = req.headers.cookie || '';
+        const match = cookieHeader.match(new RegExp(ANALYTICS_COOKIE_NAME + '=([^;]+)'));
+        const valid = ANALYTICS_SESSION_SECRET && match && match[1] === ANALYTICS_SESSION_SECRET;
+        res.writeHead(valid ? 200 : 401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: valid }));
+        return;
+    }
+
+    if (pathname === '/api/analytics-auth' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            let password = '';
+            try {
+                const parsed = JSON.parse(body || '{}');
+                password = parsed.password || '';
+            } catch (_) {}
+            const valid = ANALYTICS_PASSWORD && ANALYTICS_SESSION_SECRET && password === ANALYTICS_PASSWORD;
+            const cookie = valid
+                ? `${ANALYTICS_COOKIE_NAME}=${ANALYTICS_SESSION_SECRET}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400`
+                : `${ANALYTICS_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0`;
+            res.writeHead(valid ? 200 : 401, {
+                'Content-Type': 'application/json',
+                'Set-Cookie': cookie
+            });
+            res.end(JSON.stringify({ ok: valid }));
+        });
+        return;
+    }
+
     if (pathname === '/api/clan/members') {
         const query = parsedUrl.query || {};
         const includeFormer = query.includeFormer === '1';
@@ -1091,12 +1127,12 @@ const server = http.createServer((req, res) => {
         return;
     }
     
-    // Serve static files
+    // Serve static files; SPA routes get index.html so refresh works
+    const spaRoutes = ['/', '/summary', '/players', '/full-table', '/strategy'];
     let filePath = '.' + pathname;
-    if (filePath === './' || pathname === '/summary' || pathname === '/players') {
+    if (spaRoutes.includes(pathname)) {
         filePath = './index.html';
     }
-    
     serveStaticFile(filePath, res);
 });
 
