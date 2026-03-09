@@ -1182,9 +1182,9 @@ server.listen(PORT, async () => {
     refreshServerCache();
     scheduleCacheRefresh();
 
-    // Capture current week data only when war ends (Monday 4:30am CT)
-    // Check once per hour, but only capture if it's a new war week
-    // This prevents repetitive hourly captures
+    // CRITICAL: Save current week as "last week" when war ends (Monday 4:30am Central).
+    // Uses America/Chicago so CDT/CST apply automatically. Window 4:25-4:35am CT; isCurrentWeekZeroedOut
+    // prevents overwriting with the API's post-rollover zeros. Do not remove or alter this logic.
     const checkAndCaptureCurrentWeek = () => {
         const { day, hour, minute } = getCentralTimeParts();
         // Only capture around war end time (Monday 4:25-4:35am CT) to get final data

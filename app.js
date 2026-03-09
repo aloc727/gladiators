@@ -307,15 +307,38 @@ async function loadData() {
         // Fetch clan members
         const members = await fetchClanMembers(currentMembersOnly);
         
-        // Fetch war log (historical) and current war separately
-        const [historicalWars, currentWar] = await Promise.all([
+        // Fetch war log (historical) and current war separately (no cache so we get fresh data every 5 min)
+        const [historicalWars, currentWarRaw] = await Promise.all([
             fetchWarLog(),
-            fetch(`${API_BASE_URL}/api/clan/current-war`).then(r => r.json()).then(d => d.currentWar).catch(() => null)
+            fetch(`${API_BASE_URL}/api/clan/current-war`, { cache: 'no-store' })
+                .then(r => r.json())
+                .then(d => d.currentWar)
+                .catch(() => null)
         ]);
-        
-        console.log(`📥 Frontend: ${historicalWars.length} historical wars, ${currentWar ? '1' : '0'} current war`);
-        
-        // Combine: current war first (if available), then historical
+
+        // Only use as "current week" if the API war is actually this week (season/week or end date match), so we don't show last week's totals
+        const expected = getExpectedCurrentSeasonWeek();
+        const thisWeekMonday = getCurrentWarEndMonday();
+        const thisWeekMondayTime = thisWeekMonday.getTime();
+        let currentWar = null;
+        if (currentWarRaw && currentWarRaw.participants && currentWarRaw.participants.length) {
+            const hasSeasonWeek = currentWarRaw.seasonId != null && currentWarRaw.periodIndex != null;
+            const seasonWeekMatch = hasSeasonWeek &&
+                currentWarRaw.seasonId === expected.seasonId &&
+                currentWarRaw.periodIndex === expected.periodIndex;
+            const warEnd = currentWarRaw.endDateObj ? new Date(currentWarRaw.endDateObj) : (currentWarRaw.endDate ? new Date(currentWarRaw.endDate) : null);
+            const warEndTime = warEnd && !isNaN(warEnd.getTime()) ? warEnd.getTime() : 0;
+            const dateMatch = warEndTime && Math.abs(warEndTime - thisWeekMondayTime) < 24 * 60 * 60 * 1000;
+            if (hasSeasonWeek ? seasonWeekMatch : dateMatch) {
+                currentWar = currentWarRaw;
+            } else {
+                console.log('📥 Frontend: current-war API is not this week (API S' + (currentWarRaw.seasonId ?? '?') + 'W' + (currentWarRaw.periodIndex ?? '?') + ', expected S' + expected.seasonId + 'W' + expected.periodIndex + ') - using placeholder for Current Week');
+            }
+        }
+
+        console.log(`📥 Frontend: ${historicalWars.length} historical wars, ${currentWar ? '1' : '0'} current war (live, every 5 min)`);
+
+        // Combine: current war first (if available and valid), then historical
         const warLog = currentWar ? [currentWar, ...historicalWars] : historicalWars;
         console.log(`📥 Frontend: Combined ${warLog.length} total wars to process`);
         
@@ -452,6 +475,15 @@ function formatWarRange(endDate, startDate = null) {
 // Reference Monday for inferring Season/Week when API doesn't send them (Clash: 5 weeks per season). S129 W1 end = 2026-02-02.
 const SEASON_REF_MONDAY = new Date(Date.UTC(2026, 1, 2, 10, 30, 0, 0));
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+/** Expected season and week for "this" war week (for validating API current-war response). */
+function getExpectedCurrentSeasonWeek() {
+    const monday = getCurrentWarEndMonday();
+    const weeksSinceRef = Math.round((monday.getTime() - SEASON_REF_MONDAY.getTime()) / MS_PER_WEEK);
+    const periodsSinceRef = Math.floor(weeksSinceRef / 5);
+    const weekInSeason = ((weeksSinceRef % 5) + 5) % 5;
+    return { seasonId: 129 + periodsSinceRef, periodIndex: weekInSeason + 1 };
+}
 
 /** Current war week ends Monday 4:30am CT. Returns that Monday as Date (for placeholder column when no current-war from API). */
 function getCurrentWarEndMonday() {
