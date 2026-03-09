@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.33.0';
+const UI_VERSION = 'v1.34.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -1007,7 +1007,8 @@ function processWarData(members, warLog, options = {}) {
             tooltip: debugTooltip || null,
             endDate: war.endDateObj,
             baseLabel: displayLabel,
-            war
+            war,
+            isCurrentWeek: isCurrentWeekColumn
         };
     });
 
@@ -1227,8 +1228,9 @@ function processWarData(members, warLog, options = {}) {
         });
     });
 
-    // Identify promotion-ready members/elders (1600+ for 12 consecutive weeks, not co-leader/leader)
-    const streakColumns = filteredColumns.slice(0, 12);
+    // Identify promotion-ready members/elders (1600+ for 12 consecutive completed weeks; exclude current week)
+    const historicColumns = columns[0] && columns[0].isCurrentWeek ? filteredColumns.slice(1) : filteredColumns;
+    const streakColumns = historicColumns.slice(0, 12);
     playersMap.forEach(player => {
         if (!streakColumns.length) {
             player.promotionReady = false;
@@ -1320,11 +1322,12 @@ function renderTable(data) {
     roleHeader.addEventListener('click', () => sortTable('role', roleHeader));
     headerRow.appendChild(roleHeader);
 
-    // Average column (ignore N/A weeks; count 0 as 0)
+    // Average column (historic weeks only; current week excluded until it becomes last week)
     const avgHeader = document.createElement('th');
     avgHeader.className = 'sortable';
     avgHeader.textContent = 'Average';
     avgHeader.setAttribute('data-column', 'Average');
+    avgHeader.title = 'Based on your selected range. Current week is excluded until it becomes last week (completed).';
     avgHeader.addEventListener('click', () => sortTable('Average', avgHeader));
     headerRow.appendChild(avgHeader);
 
@@ -1751,12 +1754,14 @@ function getScoreSortValue(value, direction) {
     return Number(value) || 0;
 }
 
-/** Average points per week. Ignores N/A (null/undefined); 0 counts as 0. Returns null if no valid weeks. */
+/** Average points per week. Uses only historic (completed) weeks; current week is excluded until it becomes last week. Ignores N/A (null/undefined); 0 counts as 0. Returns null if no valid weeks. */
 function getPlayerAverage(scores, columns) {
     if (!scores || !columns || !columns.length) return null;
+    const cols = columns[0] && columns[0].isCurrentWeek ? columns.slice(1) : columns;
+    if (!cols.length) return null;
     let sum = 0;
     let count = 0;
-    columns.forEach(col => {
+    cols.forEach(col => {
         const v = scores[col.label];
         if (v !== null && v !== undefined) {
             sum += Number(v) || 0;
@@ -2391,14 +2396,14 @@ function renderDashboard() {
     }
 
     const demotionThreshold = getDemotionThreshold();
-    // Use current week (first column) for demotion watch (active week)
-    const demotionColumn = currentColumn;
+    // Use last completed week for demotion watch (ignore in-progress current week)
+    const demotionColumn = (allColumns[0] && allColumns[0].isCurrentWeek && allColumns.length > 1) ? allColumns[1] : currentColumn;
     
     // Build demotion list based on threshold and role
     const demotionList = [];
     
     if (demotionThreshold && demotionColumn) {
-        // Members and elders: check against threshold
+        // Members and elders: check against threshold (last completed week)
         const membersElders = players
             .filter(player => {
                 // Only include current members
@@ -2418,12 +2423,13 @@ function renderDashboard() {
         
         demotionList.push(...membersElders);
         
-        // Leaders and co-leaders: 12-week rolling average below 1600
+        // Leaders and co-leaders: 12-week rolling average below 1600 (historic weeks only)
         const leaderCoLeaderCandidates = players.filter(p => {
             const role = (p.role || '').toLowerCase();
             return p.isCurrent && (role === 'leader' || role === 'coleader');
         });
-        const streakColumns = allColumns.slice(0, 12);
+        const leaderHistoricColumns = (allColumns[0] && allColumns[0].isCurrentWeek) ? allColumns.slice(1, 13) : allColumns.slice(0, 12);
+        const streakColumns = leaderHistoricColumns;
         for (const player of leaderCoLeaderCandidates) {
             if (streakColumns.length < 12) continue;
             const scoresForAvg = [];
@@ -2501,7 +2507,7 @@ function renderDashboard() {
         }
         
         demotionEl.innerHTML = `
-            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in current week. Leaders and co-leaders: 12-week rolling average below 1600.">?</span></h3>
+            <h3>Demotion Watch <span class="info-icon" data-tooltip="Members/elders below threshold (700 Sun-Mon, 1600 Mon-Thu) in last completed week. Leaders and co-leaders: 12-week rolling average below 1600 (historic weeks only).">?</span></h3>
             <ul class="list">
                 ${demotionMessage}
             </ul>
