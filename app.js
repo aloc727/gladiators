@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.34.0';
+const UI_VERSION = 'v1.35.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -1228,7 +1228,7 @@ function processWarData(members, warLog, options = {}) {
         });
     });
 
-    // Identify promotion-ready members/elders (1600+ for 12 consecutive completed weeks; exclude current week)
+    // Promotion is based on last 12 completed weeks only; current week is ignored until it becomes last week
     const historicColumns = columns[0] && columns[0].isCurrentWeek ? filteredColumns.slice(1) : filteredColumns;
     const streakColumns = historicColumns.slice(0, 12);
     playersMap.forEach(player => {
@@ -2351,7 +2351,7 @@ function renderDashboard() {
 
     if (promotionEl) {
         promotionEl.innerHTML = `
-            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight weeks at 1600+ (no N/A weeks). Anyone promoted in the last 12 weeks needs another 12 weeks at 1600+ before being eligible again.">?</span></h3>
+            <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight completed weeks at 1600+ (no N/A weeks). Current week is excluded until it becomes last week. Anyone promoted in the last 12 weeks needs another 12 weeks at 1600+ before being eligible again.">?</span></h3>
             <ul class="list">
                 ${promotionList.length ? promotionList.map(player => {
                     const recent = recentPromotionsMap.get(player.tag);
@@ -2396,17 +2396,18 @@ function renderDashboard() {
     }
 
     const demotionThreshold = getDemotionThreshold();
-    // Use last completed week for demotion watch (ignore in-progress current week)
-    const demotionColumn = (allColumns[0] && allColumns[0].isCurrentWeek && allColumns.length > 1) ? allColumns[1] : currentColumn;
+    // Demotion watch is always based on last completed week; never use current week until that week has started (become last week)
+    const demotionColumn = (allColumns[0] && allColumns[0].isCurrentWeek && allColumns.length > 1)
+        ? allColumns[1]
+        : (allColumns[0] && !allColumns[0].isCurrentWeek ? allColumns[0] : null);
     
     // Build demotion list based on threshold and role
     const demotionList = [];
-    
+
     if (demotionThreshold && demotionColumn) {
-        // Members and elders: check against threshold (last completed week)
+        // Members and elders: check against threshold (last completed week only)
         const membersElders = players
             .filter(player => {
-                // Only include current members
                 if (!player.isCurrent) return false;
                 const role = (player.role || '').toLowerCase();
                 if (role !== 'member' && role !== 'elder') return false;
@@ -2420,9 +2421,10 @@ function renderDashboard() {
                 tag: player.tag,
                 score: player.scores[demotionColumn.label]
             }));
-        
         demotionList.push(...membersElders);
-        
+    }
+
+    if (demotionThreshold) {
         // Leaders and co-leaders: 12-week rolling average below 1600 (historic weeks only)
         const leaderCoLeaderCandidates = players.filter(p => {
             const role = (p.role || '').toLowerCase();
