@@ -4,6 +4,30 @@
 
 **Use branches for versions, not tags.** For each release, create a branch named `release/1.XX` (incrementing numbers, e.g. `release/1.23`, `release/1.24`). Merge into `main` and push. Do not create or rely on git tags for version markers.
 
+## Testing before deploy (avoid hotfixes in production)
+
+1. **Work on a branch**  
+   Create a branch for the change (e.g. `release/1.XX` or `fix/bug-report`). Do not commit directly to `main`.
+
+2. **Test locally**  
+   On your machine:
+   ```bash
+   npm install
+   npm start
+   ```
+   Open http://localhost:3000. Test the flows you changed (e.g. bug report, War Table, Full Table). If the app needs a DB, set `.env` (e.g. `DATABASE_URL` or `CLASH_ROYALE_API_KEY`). Fix any startup errors (e.g. `SyntaxError`, `ECONNREFUSED`) before deploying.
+
+3. **Optional: staging**  
+   If you have a staging server or Netlify branch deploy, deploy the branch there and smoke-test before merging to `main`.
+
+4. **Merge and deploy**  
+   Merge the branch into `main`, push, then deploy production (e.g. on EC2: `git fetch origin && git reset --hard origin/main && pm2 restart gladiators`). Avoid making one-off fixes directly on the production server; fix in the repo, then deploy.
+
+5. **If production diverged (e.g. after a rollback)**  
+   On the server, to match GitHub without losing local commits:  
+   `git fetch origin && git reset --hard origin/main`  
+   Then restart the app.
+
 ## Restarting the app (systemd)
 
 ```bash

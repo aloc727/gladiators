@@ -1148,14 +1148,25 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    if (pathname === '/api/bug-report' && req.method === 'POST') {
+    if (pathname === '/api/bug-report') {
+        const apiKey = process.env.RESEND_API_KEY || '';
+        const toEmail = process.env.BUG_REPORT_EMAIL || '';
+        const configured = !!(apiKey && toEmail);
+        if (req.method === 'GET') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ configured }));
+            return;
+        }
+        if (req.method !== 'POST') {
+            res.writeHead(405, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+        }
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
-            const apiKey = process.env.RESEND_API_KEY || '';
-            const toEmail = process.env.BUG_REPORT_EMAIL || '';
             const fromAddress = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
-            if (!apiKey || !toEmail) {
+            if (!configured) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Bug report not configured' }));
                 return;
@@ -1199,6 +1210,30 @@ const server = http.createServer((req, res) => {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: err.message || 'Failed to send report' }));
             }
+        });
+        return;
+    }
+
+    // Bug report form (Netlify Forms on production; local: append to data/bug_reports.jsonl)
+    if (pathname === '/' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            const params = new URLSearchParams(body || '');
+            if (params.get('form-name') === 'bug-report') {
+                const report = params.get('report') || '';
+                const dataDir = path.join(__dirname, 'data');
+                const reportFile = path.join(dataDir, 'bug_reports.jsonl');
+                try {
+                    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+                    const line = JSON.stringify({ at: new Date().toISOString(), report: report }) + '\n';
+                    fs.appendFileSync(reportFile, line);
+                } catch (e) {
+                    console.warn('Bug report write failed:', e.message);
+                }
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end('<!DOCTYPE html><html><body><p>Thank you.</p></body></html>');
         });
         return;
     }
