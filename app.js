@@ -1795,7 +1795,6 @@ function renderStrategyTabContent(container) {
     });
     participationBySeason.sort((a, b) => Number(b.seasonId) - Number(a.seasonId));
 
-    const SEGMENTS = 10;
     const boatByWeek = columns.slice(0, 12).map(col => {
         const label = col?.label;
         let boat = 0;
@@ -1859,7 +1858,7 @@ function renderStrategyTabContent(container) {
     const scatterWithPos = scatterPoints.map(toScatter);
     const scatterPointsSvg = scatterWithPos.map(d =>
         `<g class="scatter-point scatter-point-${d.isDonor ? 'donor' : 'receiver'}">
-            <circle cx="${d.x}" cy="${d.y}" r="6" class="scatter-dot"><title>${escapeHtml(d.name)} (${d.given} given, ${d.received} received)</title></circle>
+            <circle cx="${d.x}" cy="${d.y}" r="3" class="scatter-dot"><title>${escapeHtml(d.name)} (${d.given} given, ${d.received} received)</title></circle>
             <text x="${d.x}" y="${d.y - 10}" class="scatter-label" text-anchor="middle">${escapeHtml(d.name)} (${d.given}, ${d.received})</text>
         </g>`
     ).join('');
@@ -1992,11 +1991,40 @@ function renderStrategyTabContent(container) {
                 </div>
             </div>
             <h4 class="efficiency-delta-title">Efficiency delta (player − clan avg)</h4>
-            <div class="efficiency-delta-list">
+            <div class="efficiency-delta-diverging">
                 ${(() => {
                     const avg = parseFloat(pointsPerDeck) || 0;
-                    const deltas = efficiencyList.map(e => ({ name: e.name, ppd: e.ppd, delta: e.ppd - avg })).sort((a, b) => b.delta - a.delta);
-                    return deltas.map(d => `<div class="efficiency-delta-row" title="pts/deck: ${d.ppd.toFixed(1)} · delta: ${d.delta >= 0 ? '+' : ''}${d.delta.toFixed(1)}"><span class="efficiency-delta-name">${escapeHtml(d.name)}</span><span class="efficiency-delta-value${d.delta < 0 ? ' efficiency-delta-neg' : ''}">${d.delta >= 0 ? '+' : ''}${d.delta.toFixed(1)}</span></div>`).join('');
+                    const deltas = efficiencyList.map(e => ({ name: e.name, ppd: e.ppd, delta: e.ppd - avg }));
+                    const below = deltas.filter(d => d.delta < 0).sort((a, b) => a.delta - b.delta);
+                    const above = deltas.filter(d => d.delta >= 0).sort((a, b) => b.delta - a.delta);
+                    const maxAbs = Math.max(1, ...deltas.map(d => Math.abs(d.delta)));
+                    const row = (d, isBelow) => {
+                        const pct = (Math.abs(d.delta) / maxAbs) * 100;
+                        const valStr = (d.delta >= 0 ? '+' : '') + d.delta.toFixed(1);
+                        const title = `pts/deck: ${d.ppd.toFixed(1)} · delta: ${valStr}`;
+                        if (isBelow) {
+                            return `<div class="efficiency-delta-row efficiency-delta-below-row" title="${escapeHtml(title)}">
+                                <span class="efficiency-delta-name">${escapeHtml(d.name)}</span>
+                                <div class="efficiency-delta-bar-wrap"><div class="efficiency-delta-bar efficiency-delta-bar-below" style="width:${pct}%"></div></div>
+                                <span class="efficiency-delta-value efficiency-delta-neg">${valStr}</span>
+                            </div>`;
+                        }
+                        return `<div class="efficiency-delta-row efficiency-delta-above-row" title="${escapeHtml(title)}">
+                            <span class="efficiency-delta-value efficiency-delta-pos">${valStr}</span>
+                            <div class="efficiency-delta-bar-wrap"><div class="efficiency-delta-bar efficiency-delta-bar-above" style="width:${pct}%"></div></div>
+                            <span class="efficiency-delta-name">${escapeHtml(d.name)}</span>
+                        </div>`;
+                    };
+                    return `
+                        <div class="efficiency-delta-col efficiency-delta-below">
+                            <h5 class="efficiency-delta-col-title">Below average</h5>
+                            ${below.map(d => row(d, true)).join('')}
+                        </div>
+                        <div class="efficiency-delta-axis" aria-hidden="true">0</div>
+                        <div class="efficiency-delta-col efficiency-delta-above">
+                            <h5 class="efficiency-delta-col-title">Above average</h5>
+                            ${above.map(d => row(d, false)).join('')}
+                        </div>`;
                 })()}
             </div>
             <h4 class="efficiency-ppd-dist-title">Points per deck distribution</h4>
@@ -2043,21 +2071,37 @@ function renderStrategyTabContent(container) {
             <div class="participation-heatmap-wrap">
                 <h4 class="participation-subtitle">Participation heatmap</h4>
                 <div class="participation-heatmap participation-heatmap-wide" role="img" aria-label="Participation rate by season and week">
-                    ${participationBySeason.map(seg => `
-                        <div class="heatmap-season-row">
-                            <span class="heatmap-season-label">Season ${escapeHtml(seg.seasonId)}</span>
-                            <div class="heatmap-cells">
-                                ${seg.weeks.map(w => {
-                                    const pct = w.total ? (w.count / w.total) * 100 : 0;
-                                    const intensity = Math.min(100, Math.round(pct));
-                                    const hoverText = `Season ${seg.seasonId} Week ${w.periodIndex ?? ''} · ${w.count}/${w.total} participated (${Math.round(pct)}%)`;
-                                    return `<span class="heatmap-cell" style="--pct:${intensity}" title="${escapeHtml(hoverText)}">${w.periodIndex ?? ''}</span>`;
-                                }).join('')}
-                            </div>
-                        </div>
-                    `).join('')}
+                    ${(() => {
+                        const allWeeks = [...new Set(participationBySeason.flatMap(seg => seg.weeks.map(w => w.periodIndex).filter(Boolean)))].sort((a, b) => a - b);
+                        const headerRow = `
+                            <div class="heatmap-season-row heatmap-header-row">
+                                <span class="heatmap-season-label"></span>
+                                <div class="heatmap-cells">
+                                    ${allWeeks.map(weekNum => `<span class="heatmap-header-cell">Week ${weekNum}</span>`).join('')}
+                                </div>
+                            </div>`;
+                        const dataRows = participationBySeason.map(seg => {
+                            const weekMap = new Map(seg.weeks.map(w => [w.periodIndex, w]));
+                            return `
+                                <div class="heatmap-season-row">
+                                    <span class="heatmap-season-label">Season ${escapeHtml(seg.seasonId)}</span>
+                                    <div class="heatmap-cells">
+                                        ${allWeeks.map(weekNum => {
+                                            const w = weekMap.get(weekNum);
+                                            if (!w) return `<span class="heatmap-cell heatmap-cell-empty"></span>`;
+                                            const pct = w.total ? (w.count / w.total) * 100 : 0;
+                                            const intensity = Math.min(100, Math.round(pct));
+                                            const detail = `${w.count}/${w.total}`;
+                                            const lowClass = intensity < 40 ? ' heatmap-cell-low' : '';
+                                            return `<span class="heatmap-cell heatmap-cell-detail${lowClass}" style="--pct:${intensity}" title="Season ${escapeHtml(seg.seasonId)} Week ${weekNum} · ${Math.round(pct)}%">${escapeHtml(detail)}</span>`;
+                                        }).join('')}
+                                    </div>
+                                </div>`;
+                        }).join('');
+                        return headerRow + dataRows;
+                    })()}
                 </div>
-                <p class="participation-heatmap-legend">Darker = higher participation. Hover for week details.</p>
+                <p class="participation-heatmap-legend">Darker = higher participation. Number = participants / total.</p>
             </div>
             <div class="participation-timeline-wrap">
                 <h4 class="participation-subtitle">Participation progress by season</h4>
@@ -2067,12 +2111,13 @@ function renderStrategyTabContent(container) {
                             <h5 class="timeline-season-title">Season ${escapeHtml(seg.seasonId)}</h5>
                             <ul class="timeline-weeks">
                                 ${seg.weeks.map(w => {
-                                    const total = w.total || 1;
-                                    const filled = Math.min(SEGMENTS, Math.round((SEGMENTS * w.count) / total));
-                                    const blocks = '▰'.repeat(filled) + '□'.repeat(SEGMENTS - filled);
+                                    const total = Math.max(1, w.total || 1);
+                                    const count = Math.min(w.count, total);
+                                    const filledDots = '▰'.repeat(count);
+                                    const emptyDots = '□'.repeat(total - count);
                                     return `<li class="timeline-week">
                                         <span class="timeline-week-label">Week ${w.periodIndex ?? '?'}</span>
-                                        <span class="timeline-week-bar" aria-label="${w.count} of ${w.total} participated">${blocks}</span>
+                                        <span class="timeline-week-bar" aria-label="${w.count} of ${w.total} participated">${filledDots}${emptyDots}</span>
                                         <span class="timeline-week-count">${w.count}</span>
                                     </li>`;
                                 }).join('')}
