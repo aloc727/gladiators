@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v2.0.3';
+const UI_VERSION = 'v2.0.4';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -1744,6 +1744,7 @@ function renderStrategyTabContent(container) {
     });
     efficiencyList.sort((a, b) => b.ppd - a.ppd);
     const topEfficiency = efficiencyList.slice(0, 8);
+    const maxPpd = topEfficiency[0]?.ppd ?? 1;
 
     const participationByWeek = columns.slice(0, 12).map(col => {
         const label = col?.label;
