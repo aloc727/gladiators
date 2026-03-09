@@ -1215,6 +1215,46 @@ td:not(:first-child) {
     background: #64748b;
 }
 
+/* Blur main content until cookie consent */
+body.cookie-consent-pending .container {
+    filter: blur(6px);
+    pointer-events: none;
+    user-select: none;
+}
+body.cookie-consent-pending .cookie-consent {
+    pointer-events: auto;
+}
+
+/* Full Table password gate */
+.full-table-gate {
+    padding: 2rem;
+    max-width: 400px;
+    margin: 0 auto;
+}
+.full-table-gate-inner h3 { margin-bottom: 0.5rem; color: #2c54c7; }
+.full-table-gate-text { color: #4b5563; font-size: 0.95rem; margin-bottom: 1rem; }
+.full-table-gate-inner input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d7dcf1;
+    border-radius: 8px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    margin-bottom: 8px;
+}
+.full-table-gate-inner button {
+    width: 100%;
+    padding: 10px 16px;
+    background: #2c54c7;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.full-table-gate-inner button:hover { background: #2343a0; }
+.full-table-gate-error { color: #b42318; font-size: 0.9rem; margin-top: 8px; }
+
 /* Strategy tab */
 .strategy-tab-content { padding: 0 0 2rem; }
 .strategy-section {
@@ -1265,10 +1305,16 @@ td:not(:first-child) {
 }
 .toggle-label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.95rem; }
 .table-container-full { overflow-x: auto; }
+.table-container-full thead th {
+    color: #fff;
+    background: #1e3a5f;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+.table-container-full thead th.ft-p { background: #1e3a5f; }
+.table-container-full thead th.ft-d { background: #1a3352; }
+.table-container-full thead th.ft-b { background: #162a47; }
+.table-container-full thead th.ft-t { background: #12223d; }
 .table-container-full .ft-col { font-size: 0.85rem; padding: 6px 8px; white-space: nowrap; }
-.table-container-full .ft-p { color: #1f2937; }
-.table-container-full .ft-d { color: #475569; }
-.table-container-full .ft-b { color: #64748b; }
 
 /* Streaks card */
 .streaks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }

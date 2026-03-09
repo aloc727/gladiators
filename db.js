@@ -146,6 +146,23 @@ async function getWarWeeks(limit = null) {
     });
 }
 
+async function getWarWeeksBySeasonPeriod(seasonId, periodIndex) {
+    const result = await pool.query(
+        'SELECT * FROM war_weeks WHERE season_id = $1 AND period_index = $2 ORDER BY end_date DESC',
+        [seasonId, periodIndex]
+    );
+    return result.rows.map(row => ({
+        id: row.id,
+        seasonId: row.season_id,
+        sectionIndex: row.section_index,
+        periodIndex: row.period_index,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        createdDate: row.created_date,
+        dataSource: row.data_source
+    }));
+}
+
 async function getWarWeekByEndDate(endDate) {
     // Convert endDate to proper format for comparison
     // PostgreSQL TIMESTAMP comparison needs to handle timezone correctly
@@ -305,6 +322,18 @@ async function upsertParticipant(participant) {
     
     const result = await pool.query(query, values);
     return result.rows[0];
+}
+
+/** Update only decks_used and boat_attacks for a participant (do not overwrite war_points or rank). */
+async function updateParticipantDecksBoatOnly(warWeekId, memberTag, decksUsed, boatAttacks) {
+    const result = await pool.query(
+        `UPDATE war_participants 
+         SET decks_used = COALESCE($1, decks_used), boat_attacks = COALESCE($2, boat_attacks)
+         WHERE war_week_id = $3 AND member_tag = $4
+         RETURNING id`,
+        [decksUsed != null ? decksUsed : null, boatAttacks != null ? boatAttacks : null, warWeekId, memberTag]
+    );
+    return result.rowCount > 0;
 }
 
 /**
@@ -495,6 +524,8 @@ module.exports = {
     // War Weeks
     getWarWeeks,
     getWarWeekByEndDate,
+    getWarWeeksBySeasonPeriod,
+    updateParticipantDecksBoatOnly,
     upsertWarWeek,
     
     // Participants

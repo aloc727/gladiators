@@ -29,7 +29,18 @@ const WARNING_THRESHOLD = 800;
 const RECENT_JOIN_DAYS = 7;
 const MAX_WEEKS_DISPLAY = 1000; // Temporarily increased for debugging
 
-/** Cookie consent: show banner if no choice; grant GA when user accepts (tag is already in head). */
+/** Member count per week for Strategy participation denominator (use that week's roster size, not current). Going forward capture each week when saving snapshots. */
+const WEEK_MEMBER_COUNT = {
+    'S127W4': 50, 'S127W5': 48,
+    'S128W1': 48, 'S128W2': 50, 'S128W3': 52, 'S128W4': 49,
+    'S129W1': 49, 'S129W2': 46, 'S129W3': 48, 'S129W4': 43
+};
+function getWeekMemberCount(seasonId, periodIndex) {
+    if (seasonId == null || periodIndex == null) return null;
+    return WEEK_MEMBER_COUNT[`S${seasonId}W${periodIndex}`] ?? null;
+}
+
+/** Cookie consent: show banner if no choice; blur page until choice; grant GA when user accepts. */
 function initCookieConsent() {
     const consent = localStorage.getItem(COOKIE_CONSENT_KEY);
     const banner = document.getElementById('cookieConsent');
@@ -40,16 +51,23 @@ function initCookieConsent() {
     }
     if (consent === 'rejected') return;
     banner.style.display = 'block';
+    document.body.classList.add('cookie-consent-pending');
     document.getElementById('cookieAccept')?.addEventListener('click', () => {
         localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
         banner.style.display = 'none';
+        document.body.classList.remove('cookie-consent-pending');
         if (window.gtag) window.gtag('consent', 'update', { analytics_storage: 'granted' });
     });
     document.getElementById('cookieReject')?.addEventListener('click', () => {
         localStorage.setItem(COOKIE_CONSENT_KEY, 'rejected');
         banner.style.display = 'none';
+        document.body.classList.remove('cookie-consent-pending');
     });
 }
+
+// Full Table: same password pattern as analytics page (change to match your analytics password if desired)
+const FULL_TABLE_UNLOCK_KEY = 'gladiators_fulltable_ok';
+const FULL_TABLE_PASSWORD = 'gladiators-fulltable';
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
@@ -146,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Full table column type toggles
-    ['ftShowPoints', 'ftShowDecks', 'ftShowBoat'].forEach(id => {
+    ['ftShowPoints', 'ftShowDecks', 'ftShowBoat', 'ftShowTrophies'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', () => renderView());
     });
@@ -516,7 +534,8 @@ function processWarData(members, warLog) {
             isCurrent: member.isCurrent !== false,
             scores: {},
             decksUsed: {},
-            boatAttacks: {}
+            boatAttacks: {},
+            trophies: {}
         };
         playersMap.set(member.tag, player);
         playersByName.set(member.name.toLowerCase(), player);
@@ -809,6 +828,7 @@ function processWarData(members, warLog) {
             player.scores[column.label] = null;
             player.decksUsed[column.label] = null;
             player.boatAttacks[column.label] = null;
+            player.trophies[column.label] = null;
         });
     });
 
@@ -867,7 +887,8 @@ function processWarData(members, warLog) {
                         isCurrent: false,
                         scores: {},
                         decksUsed: {},
-                        boatAttacks: {}
+                        boatAttacks: {},
+                        trophies: {}
                     };
                     // Add to maps so we can find it later
                     if (tag) playersMap.set(tag, player);
@@ -896,6 +917,7 @@ function processWarData(members, warLog) {
                 player.scores[dateLabel] = null;
                 player.decksUsed[dateLabel] = participant.decksUsed !== null && participant.decksUsed !== undefined ? participant.decksUsed : null;
                 player.boatAttacks[dateLabel] = participant.boatAttacks !== null && participant.boatAttacks !== undefined ? participant.boatAttacks : null;
+                player.trophies[dateLabel] = participant.trophies !== null && participant.trophies !== undefined ? participant.trophies : null;
                 return;
             }
             
@@ -906,10 +928,12 @@ function processWarData(members, warLog) {
                     ? participant.battlesPlayed
                     : null);
             const boatAttacks = participant.boatAttacks !== null && participant.boatAttacks !== undefined ? participant.boatAttacks : null;
+            const trophies = participant.trophies !== null && participant.trophies !== undefined ? participant.trophies : null;
             
             player.scores[dateLabel] = finalWarPoints;
             player.decksUsed[dateLabel] = decksUsed;
             player.boatAttacks[dateLabel] = boatAttacks;
+            player.trophies[dateLabel] = trophies;
             matchedParticipants++;
         });
     });
@@ -1242,8 +1266,43 @@ function sortTable(column, headerElement, forceDirection = null) {
 }
 
 function renderFullTableIfActive() {
-    if (currentTab !== 'fulltable' || !latestData) return;
-    renderFullTable();
+    if (currentTab !== 'fulltable') return;
+    const gateEl = document.getElementById('fullTableGate');
+    const contentEl = document.getElementById('fullTableContent');
+    if (!gateEl || !contentEl) return;
+    const unlocked = sessionStorage.getItem(FULL_TABLE_UNLOCK_KEY);
+    if (unlocked) {
+        gateEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        if (latestData) renderFullTable();
+        return;
+    }
+    contentEl.style.display = 'none';
+    gateEl.style.display = 'block';
+    gateEl.innerHTML = `
+        <div class="full-table-gate-inner">
+            <h3>Full Table</h3>
+            <p class="full-table-gate-text">Enter the password to view the full war table (points, decks, boat attacks).</p>
+            <input type="password" id="fullTablePassword" placeholder="Password" autocomplete="off" aria-label="Full Table password">
+            <button type="button" id="fullTableSubmit">Continue</button>
+            <p class="full-table-gate-error" id="fullTableGateError" role="alert"></p>
+        </div>
+    `;
+    const errEl = document.getElementById('fullTableGateError');
+    document.getElementById('fullTableSubmit')?.addEventListener('click', () => {
+        const input = document.getElementById('fullTablePassword');
+        if (!input) return;
+        errEl.textContent = '';
+        if (input.value === FULL_TABLE_PASSWORD) {
+            sessionStorage.setItem(FULL_TABLE_UNLOCK_KEY, '1');
+            renderFullTableIfActive();
+        } else {
+            errEl.textContent = 'Incorrect password.';
+        }
+    });
+    document.getElementById('fullTablePassword')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('fullTableSubmit')?.click();
+    });
 }
 
 function renderFullTable() {
@@ -1258,6 +1317,7 @@ function renderFullTable() {
     const showP = document.getElementById('ftShowPoints')?.checked !== false;
     const showD = document.getElementById('ftShowDecks')?.checked !== false;
     const showB = document.getElementById('ftShowBoat')?.checked === true;
+    const showT = document.getElementById('ftShowTrophies')?.checked === true;
 
     head.innerHTML = '';
     body.innerHTML = '';
@@ -1270,6 +1330,7 @@ function renderFullTable() {
         if (showP) { const th = document.createElement('th'); th.className = 'ft-col ft-p'; th.textContent = label + ' (P)'; headerRow.appendChild(th); }
         if (showD) { const th = document.createElement('th'); th.className = 'ft-col ft-d'; th.textContent = label + ' (D)'; headerRow.appendChild(th); }
         if (showB) { const th = document.createElement('th'); th.className = 'ft-col ft-b'; th.textContent = label + ' (B)'; headerRow.appendChild(th); }
+        if (showT) { const th = document.createElement('th'); th.className = 'ft-col ft-t'; th.textContent = label + ' (T)'; headerRow.appendChild(th); }
     });
     head.appendChild(headerRow);
 
@@ -1309,6 +1370,13 @@ function renderFullTable() {
             if (showB) {
                 const cell = document.createElement('td');
                 const v = player.boatAttacks?.[column.label];
+                cell.textContent = v != null ? v : '—';
+                if (v == null) cell.classList.add('score-na');
+                row.appendChild(cell);
+            }
+            if (showT) {
+                const cell = document.createElement('td');
+                const v = player.trophies?.[column.label];
                 cell.textContent = v != null ? v : '—';
                 if (v == null) cell.classList.add('score-na');
                 row.appendChild(cell);
@@ -1364,7 +1432,8 @@ function renderStrategyTab() {
 
     const participationByWeek = columns.slice(0, 12).map(col => {
         const count = players.filter(p => p.scores[col.label] != null).length;
-        return { label: (col.displayLabel || col.label).split('(')[0].trim(), count, total: players.length };
+        const total = getWeekMemberCount(col.war?.seasonId, col.war?.periodIndex) ?? players.length;
+        return { label: (col.displayLabel || col.label).split('(')[0].trim(), count, total };
     }).reverse();
 
     const boatNote = weeksWithBoat > 0
@@ -1553,6 +1622,7 @@ function downloadFullTableCsv() {
     const showP = document.getElementById('ftShowPoints')?.checked !== false;
     const showD = document.getElementById('ftShowDecks')?.checked !== false;
     const showB = document.getElementById('ftShowBoat')?.checked === true;
+    const showT = document.getElementById('ftShowTrophies')?.checked === true;
     const columns = getVisibleColumns(latestData.columns, fullTableRange);
     const players = latestData.players.filter(p => (currentMembersOnly ? p.isCurrent : true));
     const headerCells = ['Player Name', 'Tag', 'Role'];
@@ -1561,6 +1631,7 @@ function downloadFullTableCsv() {
         if (showP) headerCells.push(label + ' (P)');
         if (showD) headerCells.push(label + ' (D)');
         if (showB) headerCells.push(label + ' (B)');
+        if (showT) headerCells.push(label + ' (T)');
     });
     const rows = [headerCells.map(escapeCsvCell).join(',')];
     players.forEach(player => {
@@ -1569,6 +1640,7 @@ function downloadFullTableCsv() {
             if (showP) row.push(player.scores[col.label] != null ? player.scores[col.label] : '');
             if (showD) row.push(player.decksUsed?.[col.label] != null ? player.decksUsed[col.label] : '');
             if (showB) row.push(player.boatAttacks?.[col.label] != null ? player.boatAttacks[col.label] : '');
+            if (showT) row.push(player.trophies?.[col.label] != null ? player.trophies[col.label] : '');
         });
         rows.push(row.map(escapeCsvCell).join(','));
     });
@@ -1623,6 +1695,8 @@ function setActiveTab(tab, updateUrl = false) {
         button.classList.toggle('active', button.dataset.tab === tab);
     });
     renderTabVisibility();
+    if (tab === 'strategy') renderStrategyTabIfActive();
+    if (tab === 'fulltable') renderFullTableIfActive();
 
     if (updateUrl) {
         const button = document.querySelector(`.menu-tab[data-tab="${tab}"]`);
