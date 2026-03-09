@@ -1710,6 +1710,83 @@ body.cookie-consent-pending .cookie-consent {
     color: #64748b;
     margin-top: 0.25rem;
 }
+.donation-scatter-first {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.donation-scatter-first .donation-panel-title { margin-bottom: 0.5rem; }
+.donation-scatter-wide .donation-scatter-svg { max-width: 100%; }
+.scatter-axis-label { font-size: 11px; fill: #64748b; font-weight: 600; }
+.scatter-point { cursor: pointer; }
+.scatter-point .scatter-dot {
+    fill: #1e3a8a;
+    stroke: #fff;
+    stroke-width: 1.5;
+    transition: fill 0.2s;
+}
+.scatter-point-donor .scatter-dot { fill: #047857; }
+.scatter-point-receiver .scatter-dot { fill: #ea580c; }
+.scatter-point .scatter-label {
+    font-size: 8px;
+    fill: #0f172a;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+.scatter-point:hover .scatter-label { opacity: 1; }
+.scatter-point:hover .scatter-dot { filter: brightness(1.15); }
+
+.donation-leaderboard-widescreen { grid-column: 1 / -1; margin-bottom: 1.25rem; }
+.donor-sort-label { font-size: 0.9rem; color: #475569; margin-right: 0.5rem; }
+.donor-sort-select {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.9rem;
+    background: #fff;
+}
+.donation-bar-name-fixed {
+    display: inline-block;
+    width: 140px;
+    min-width: 140px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: #0f172a;
+    font-size: 0.9rem;
+    vertical-align: top;
+    margin-right: 12px;
+}
+.donation-bar-track-wrap {
+    display: inline-block;
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+}
+.donation-leaderboard-bars .donation-bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.donation-leaderboard-bars .donation-bar-track-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.donation-bar-received-line {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    padding-left: 4px;
+}
+
 .donation-economy-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1848,6 +1925,16 @@ body.cookie-consent-pending .cookie-consent {
     white-space: nowrap;
     color: #0f172a;
 }
+.diverging-col .diverging-name-fixed {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #0f172a;
+    flex-shrink: 0;
+}
 .diverging-col .diverging-bar-wrap {
     flex: 1;
     height: 16px;
@@ -1886,6 +1973,17 @@ body.cookie-consent-pending .cookie-consent {
     color: #0f172a;
     font-weight: 500;
 }
+.donation-histogram-chart .histogram-label-fixed {
+    width: 90px;
+    min-width: 90px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #0f172a;
+    font-weight: 500;
+    flex-shrink: 0;
+}
 .donation-histogram-chart .histogram-bar-wrap {
     flex: 1;
     height: 18px;
@@ -1910,6 +2008,113 @@ body.cookie-consent-pending .cookie-consent {
     .donation-stat-cards { grid-template-columns: repeat(2, 1fr); }
     .donation-economy-grid { grid-template-columns: 1fr; }
 }
+
+/* Efficiency: gauge, delta list, PPD distribution */
+.efficiency-gauge-wrap {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 10px;
+    text-align: center;
+}
+.efficiency-gauge {
+    position: relative;
+    width: 200px;
+    height: 110px;
+    margin: 0 auto 0.5rem;
+}
+.efficiency-gauge-track {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 0;
+    height: 60px;
+    border-radius: 100px 100px 0 0;
+    overflow: hidden;
+    background: #e2e8f0;
+}
+.efficiency-gauge-zone {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: 100px 100px 0 0;
+}
+.efficiency-gauge-red   { left: 0;   width: 33.33%; background: #dc2626; }
+.efficiency-gauge-yellow { left: 33.33%; width: 33.33%; background: #eab308; }
+.efficiency-gauge-green { left: 66.66%; width: 33.34%; background: #16a34a; }
+.efficiency-gauge-needle {
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    width: 3px;
+    height: 52px;
+    background: #0f172a;
+    border-radius: 2px;
+    transform-origin: 50% 100%;
+    transform: rotate(calc(-90deg + var(--gauge-value, 0) * 1.8deg));
+    transition: transform 0.3s ease;
+}
+.efficiency-gauge-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin-top: 0.25rem;
+}
+.efficiency-gauge-label {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 2px;
+}
+.efficiency-gauge-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    padding: 0 4px;
+    font-size: 0.7rem;
+    color: #64748b;
+}
+.efficiency-delta-title {
+    font-size: 1rem;
+    margin: 1rem 0 0.5rem;
+    color: #0f172a;
+}
+.efficiency-delta-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-size: 0.9rem;
+}
+.efficiency-delta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.efficiency-delta-name { color: #0f172a; font-weight: 500; }
+.efficiency-delta-value { font-weight: 700; color: #047857; }
+.efficiency-delta-value.efficiency-delta-neg { color: #b91c1c; }
+.efficiency-ppd-dist-title {
+    font-size: 1rem;
+    margin: 1.25rem 0 0.5rem;
+    color: #0f172a;
+}
+.efficiency-ppd-dist { font-size: 0.85rem; }
+.ppd-dist-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 4px;
+}
+.ppd-dist-label {
+    width: 70px;
+    color: #475569;
+    font-weight: 500;
+}
+.ppd-dist-bar {
+    font-family: ui-monospace, monospace;
+    color: #1e3a8a;
+    letter-spacing: 1px;
+}
+.ppd-dist-count { font-weight: 600; color: #0f172a; }
 
 /* Strategy infographics: Efficiency (kept) */
 .infographic-efficiency .infographic-stats-row {
