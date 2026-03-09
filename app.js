@@ -449,21 +449,56 @@ function formatWarRange(endDate, startDate = null) {
     return `${formatWarDate(startDateObj.toISOString())}-${formatWarDate(endDateObj.toISOString())}`;
 }
 
+// Reference Monday for inferring Season/Week when API doesn't send them (Clash: 5 weeks per season). S129 W1 end = 2026-02-02.
+const SEASON_REF_MONDAY = new Date(Date.UTC(2026, 1, 2, 10, 30, 0, 0));
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+/** Current war week ends Monday 4:30am CT. Returns that Monday as Date (for placeholder column when no current-war from API). */
+function getCurrentWarEndMonday() {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago',
+        year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    const parts = formatter.formatToParts(now);
+    const get = (t) => parts.find(p => p.type === t)?.value || '';
+    const y = parseInt(get('year'), 10), m = parseInt(get('month'), 10), d = parseInt(get('day'), 10);
+    const weekday = get('weekday');
+    const hour = parseInt(get('hour'), 10), min = parseInt(get('minute'), 10);
+    const weekdayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+    const dayOfWeek = weekdayMap[weekday] ?? 0;
+    let targetMonday = new Date(y, m - 1, d);
+    if (!(dayOfWeek === 1 && (hour < 4 || (hour === 4 && min < 30)))) {
+        const daysToAdd = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
+        targetMonday.setDate(targetMonday.getDate() + daysToAdd);
+    }
+    targetMonday.setHours(10, 30, 0, 0); // 4:30am CT ≈ 10:30 UTC (CST)
+    return targetMonday;
+}
+
 function getSeasonWeekLabel(war) {
     const seasonId = war.seasonId ?? war.season?.id ?? null;
-    // periodIndex is the week number (1-5), sectionIndex is usually 0
     const weekIndex = Number.isInteger(war.periodIndex) ? war.periodIndex
         : Number.isInteger(war.sectionIndex) ? war.sectionIndex + 1
         : null;
-    if (seasonId && weekIndex) {
+    if (seasonId != null && weekIndex != null) {
         return `Season ${seasonId} Week ${weekIndex}`;
     }
     if (war.label && war.label.includes('Season')) {
         return war.label.replace(/\s*\(.*\)$/, '');
     }
-    // Fallback: label from end date so every column has a clear header
+    // Infer Season/Week from end date when API didn't send them
     const endDate = war.endDateObj || (war.endDate ? new Date(war.endDate) : null);
     if (endDate && !isNaN(endDate.getTime())) {
+        const weeksSinceRef = Math.round((endDate.getTime() - SEASON_REF_MONDAY.getTime()) / MS_PER_WEEK);
+        const periodsSinceRef = Math.floor(weeksSinceRef / 5);
+        const weekInSeason = ((weeksSinceRef % 5) + 5) % 5;
+        const inferredSeason = 129 + periodsSinceRef;
+        const inferredWeek = weekInSeason + 1;
+        if (inferredSeason >= 1 && inferredWeek >= 1 && inferredWeek <= 5) {
+            return `Season ${inferredSeason} Week ${inferredWeek}`;
+        }
         return `Week of ${formatWarDate(endDate.toISOString())}`;
     }
     return '';
@@ -740,8 +775,22 @@ function processWarData(members, warLog, options = {}) {
         existing.label = preferredLabel || existing.label;
     });
 
-    const dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
-    
+    let dateMergedWars = Array.from(dateMergedMap.values()).sort((a, b) => b.endDateObj - a.endDateObj);
+
+    // When API didn't return current war, add a placeholder "current week" column so it shows N/A (zeroed) instead of last week's numbers
+    if (!hasCurrentWeek && dateMergedWars.length > 0) {
+        const endMonday = getCurrentWarEndMonday();
+        const startThursday = new Date(endMonday);
+        startThursday.setDate(endMonday.getDate() - 4);
+        dateMergedWars = [{
+            endDateObj: endMonday,
+            startDate: startThursday.toISOString(),
+            endDate: endMonday.toISOString(),
+            createdDate: endMonday.toISOString(),
+            participants: []
+        }, ...dateMergedWars];
+    }
+
     console.log('Date merged wars:', dateMergedWars.length, 'unique wars after date merging (expected:', mergedWars.length, 'if no duplicates)');
     console.log('All merged wars with details:', dateMergedWars.map(w => ({
         id: w.id,
@@ -779,9 +828,10 @@ function processWarData(members, warLog, options = {}) {
         const seasonPeriodLabel = seasonInfo && periodInfo ? `${seasonInfo}${periodInfo}` : seasonInfo || '';
         const debugTooltip = war.id ? `ID:${war.id}${seasonPeriodLabel ? `, ${seasonPeriodLabel}` : ''}` : (seasonPeriodLabel || '');
 
-        // Only call the first column "Current Week" when we actually have live current-week data from the API
+        // First column: "Current Week" when we have live data from API, or when it's the placeholder (no participants = zeroed)
+        const isCurrentWeekColumn = index === 0 && (hasCurrentWeek || !(war.participants && war.participants.length));
         let displayLabel;
-        if (index === 0 && hasCurrentWeek) {
+        if (isCurrentWeekColumn) {
             displayLabel = seasonWeek ? `Current Week - ${seasonWeek} (${range})` : `Current Week (${range})`;
         } else {
             displayLabel = seasonWeek ? `${seasonWeek} (${range})` : range;
