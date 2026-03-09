@@ -316,29 +316,14 @@ async function loadData() {
                 .catch(() => null)
         ]);
 
-        // Only use as "current week" if the API war is actually this week (season/week or end date match), so we don't show last week's totals
-        const expected = getExpectedCurrentSeasonWeek();
-        const thisWeekMonday = getCurrentWarEndMonday();
-        const thisWeekMondayTime = thisWeekMonday.getTime();
-        let currentWar = null;
-        if (currentWarRaw && currentWarRaw.participants && currentWarRaw.participants.length) {
-            const hasSeasonWeek = currentWarRaw.seasonId != null && currentWarRaw.periodIndex != null;
-            const seasonWeekMatch = hasSeasonWeek &&
-                currentWarRaw.seasonId === expected.seasonId &&
-                currentWarRaw.periodIndex === expected.periodIndex;
-            const warEnd = currentWarRaw.endDateObj ? new Date(currentWarRaw.endDateObj) : (currentWarRaw.endDate ? new Date(currentWarRaw.endDate) : null);
-            const warEndTime = warEnd && !isNaN(warEnd.getTime()) ? warEnd.getTime() : 0;
-            const dateMatch = warEndTime && Math.abs(warEndTime - thisWeekMondayTime) < 24 * 60 * 60 * 1000;
-            if (hasSeasonWeek ? seasonWeekMatch : dateMatch) {
-                currentWar = currentWarRaw;
-            } else {
-                console.log('📥 Frontend: current-war API is not this week (API S' + (currentWarRaw.seasonId ?? '?') + 'W' + (currentWarRaw.periodIndex ?? '?') + ', expected S' + expected.seasonId + 'W' + expected.periodIndex + ') - using placeholder for Current Week');
-            }
-        }
+        // Use whatever the API returns as "current week" – currentriverrace is the source of truth (new week when the app has rolled over)
+        const currentWar = (currentWarRaw && currentWarRaw.participants && currentWarRaw.participants.length)
+            ? currentWarRaw
+            : null;
 
         console.log(`📥 Frontend: ${historicalWars.length} historical wars, ${currentWar ? '1' : '0'} current war (live, every 5 min)`);
 
-        // Combine: current war first (if available and valid), then historical
+        // Combine: current war first so the first column is always the API's current week
         const warLog = currentWar ? [currentWar, ...historicalWars] : historicalWars;
         console.log(`📥 Frontend: Combined ${warLog.length} total wars to process`);
         
