@@ -41,6 +41,8 @@
             </button>
             <nav class="menu-tabs" id="menuTabs" role="navigation" aria-label="Main navigation">
                 <button class="menu-tab active" data-tab="table" data-route="/">War Table</button>
+                <button class="menu-tab" data-tab="fulltable" data-route="/full-table">Full Table</button>
+                <button class="menu-tab" data-tab="strategy" data-route="/strategy">Strategy</button>
                 <button class="menu-tab" data-tab="summary" data-route="/summary">Summary</button>
                 <button class="menu-tab" data-tab="players" data-route="/players">Players</button>
                 <a href="https://groupme.com/join_group/86019874/JpvE3Z5b" target="_blank" rel="noopener noreferrer" class="menu-tab menu-tab-link">Chat</a>
@@ -97,12 +99,52 @@
             <div id="errorMessage" class="error" style="display: none;"></div>
         </section>
 
+        <section class="tab-panel" id="tab-fulltable" aria-label="Full war table with points, decks, and boat attacks">
+            <div class="legend">
+                <span class="legend-item legend-green">1600+ (On Track)</span>
+                <span class="legend-item legend-yellow">800 - 1599 (Needs Nudge)</span>
+                <span class="legend-item legend-red">0 - 799 (At Risk)</span>
+            </div>
+            <div class="full-table-controls">
+                <p class="full-table-intro">Show columns per week: choose which metrics to display. P = War points, D = Decks used, B = Boat attacks.</p>
+                <div class="column-type-toggles" role="group" aria-label="Column types to show">
+                    <label class="toggle-label"><input type="checkbox" id="ftShowPoints" checked> Points (P)</label>
+                    <label class="toggle-label"><input type="checkbox" id="ftShowDecks" checked> Decks (D)</label>
+                    <label class="toggle-label"><input type="checkbox" id="ftShowBoat"> Boat (B)</label>
+                </div>
+            </div>
+            <div class="tabs">
+                <button class="range-tab" data-range="fulltable-last4weeks" data-context="fulltable">Last 4 weeks</button>
+                <button class="range-tab" data-range="fulltable-last8weeks" data-context="fulltable">Last 8 weeks</button>
+                <button class="range-tab" data-range="fulltable-last12weeks" data-context="fulltable">Last 12 weeks</button>
+                <button class="range-tab" data-range="fulltable-all" data-context="fulltable">All Time</button>
+                <label class="member-toggle"><input type="checkbox" id="currentMembersOnlyFull" checked> Current members only</label>
+            </div>
+            <div class="controls full-table-controls-row">
+                <button type="button" class="btn-download-csv" id="downloadFullTableCsvBtn" aria-label="Download Full Table as CSV">Download CSV</button>
+            </div>
+            <div class="table-container table-container-full" id="fullTableView">
+                <table id="fullStatsTable">
+                    <caption class="sr-only">Full war table: points, decks used, and boat attacks per week.</caption>
+                    <thead id="fullTableHead"></thead>
+                    <tbody id="fullTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="tab-panel" id="tab-strategy" aria-label="Strategy and insights">
+            <div class="strategy-tab-content" id="strategyTabContent">
+                <!-- Rendered by app.js -->
+            </div>
+        </section>
+
         <section class="tab-panel" id="tab-summary" aria-label="Summary dashboard">
             <section class="highlights" id="highlights"></section>
             <p class="summary-legend" id="summaryLegend">Green = on track (1600+), yellow = nudge (800–1599), red = at risk.</p>
 
             <section class="dashboard">
                 <div class="dashboard-card" id="clanStats"></div>
+                <div class="dashboard-card" id="streaksCard"></div>
                 <div class="dashboard-card" id="strategyBoard"></div>
                 <div class="dashboard-card" id="recentPromotionsCard"></div>
                 <div class="dashboard-card" id="recentDemotionsCard"></div>

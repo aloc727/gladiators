@@ -19,6 +19,7 @@ let lastDataUpdatedAt = null; // For relative "last updated" display
 let currentTab = 'table';
 // Initialize currentRange from localStorage or default to 'all'
 let currentRange = localStorage.getItem('currentRange') || 'all';
+let fullTableRange = localStorage.getItem('fullTableRange') || 'last12weeks';
 let currentMembersOnly = true;
 let userSort = null;
 
@@ -52,7 +53,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.23.0';
+const UI_VERSION = 'v1.26.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -125,17 +126,41 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cookie consent and analytics: show banner if no choice yet; load GA only if user accepted
     initCookieConsent();
 
-    // Range switching
+    // Range switching (War Table vs Full Table have separate range tabs)
     document.querySelectorAll('.range-tab').forEach(button => {
         button.addEventListener('click', () => {
-            document.querySelectorAll('.range-tab').forEach(b => b.classList.remove('active'));
-            button.classList.add('active');
-            currentRange = button.dataset.range;
-            // Save to localStorage
-            localStorage.setItem('currentRange', currentRange);
+            const isFullTable = button.dataset.context === 'fulltable';
+            if (isFullTable) {
+                fullTableRange = (button.dataset.range || '').replace(/^fulltable-/, '') || 'all';
+                localStorage.setItem('fullTableRange', fullTableRange);
+                document.querySelectorAll('.range-tab[data-context="fulltable"]').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+            } else {
+                currentRange = button.dataset.range;
+                localStorage.setItem('currentRange', currentRange);
+                document.querySelectorAll('.range-tab:not([data-context])').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+            }
             renderView();
         });
     });
+
+    // Full table column type toggles
+    ['ftShowPoints', 'ftShowDecks', 'ftShowBoat'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', () => renderView());
+    });
+    const fullTableMembersToggle = document.getElementById('currentMembersOnlyFull');
+    if (fullTableMembersToggle) {
+        const saved = localStorage.getItem('currentMembersOnly');
+        if (saved !== null) fullTableMembersToggle.checked = saved === 'true';
+        fullTableMembersToggle.addEventListener('change', () => {
+            currentMembersOnly = fullTableMembersToggle.checked;
+            localStorage.setItem('currentMembersOnly', currentMembersOnly);
+            document.getElementById('currentMembersOnly').checked = currentMembersOnly;
+            renderView();
+        });
+    }
 
     // Member filter toggle: default "current members only" checked; remember user choice
     const memberToggle = document.getElementById('currentMembersOnly');
@@ -151,6 +176,8 @@ document.addEventListener('DOMContentLoaded', () => {
         memberToggle.addEventListener('change', (e) => {
             currentMembersOnly = e.target.checked;
             localStorage.setItem('currentMembersOnly', String(currentMembersOnly));
+            const ftToggle = document.getElementById('currentMembersOnlyFull');
+            if (ftToggle) ftToggle.checked = currentMembersOnly;
             renderView();
         });
     }
@@ -183,6 +210,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadCsvBtn = document.getElementById('downloadCsvBtn');
     if (downloadCsvBtn) {
         downloadCsvBtn.addEventListener('click', () => downloadWarTableCsv());
+    }
+    const downloadFullTableCsvBtn = document.getElementById('downloadFullTableCsvBtn');
+    if (downloadFullTableCsvBtn) {
+        downloadFullTableCsvBtn.addEventListener('click', () => downloadFullTableCsv());
     }
 });
 
@@ -484,7 +515,8 @@ function processWarData(members, warLog) {
             firstSeen: member.firstSeen || null,
             isCurrent: member.isCurrent !== false,
             scores: {},
-            decksUsed: {}
+            decksUsed: {},
+            boatAttacks: {}
         };
         playersMap.set(member.tag, player);
         playersByName.set(member.name.toLowerCase(), player);
@@ -771,12 +803,12 @@ function processWarData(members, warLog) {
         columns[0].displayLabel = CURRENT_WAR_LABEL;
     }
 
-    // Initialize all players with 0 for each date column
+    // Initialize all players with null for each date column
     filteredColumns.forEach(column => {
         playersMap.forEach(player => {
-            // Default to N/A when no data exists for a week.
             player.scores[column.label] = null;
             player.decksUsed[column.label] = null;
+            player.boatAttacks[column.label] = null;
         });
     });
 
@@ -832,9 +864,10 @@ function processWarData(members, warLog) {
                         tag: tag || '',
                         role: participant.role || 'member',
                         firstSeen: null,
-                        isCurrent: false, // Mark as former member
+                        isCurrent: false,
                         scores: {},
-                        decksUsed: {}
+                        decksUsed: {},
+                        boatAttacks: {}
                     };
                     // Add to maps so we can find it later
                     if (tag) playersMap.set(tag, player);
@@ -862,19 +895,21 @@ function processWarData(members, warLog) {
             if (warPoints === null) {
                 player.scores[dateLabel] = null;
                 player.decksUsed[dateLabel] = participant.decksUsed !== null && participant.decksUsed !== undefined ? participant.decksUsed : null;
+                player.boatAttacks[dateLabel] = participant.boatAttacks !== null && participant.boatAttacks !== undefined ? participant.boatAttacks : null;
                 return;
             }
             
-            // Otherwise use the value (even if 0)
             const finalWarPoints = warPoints || 0;
             const decksUsed = participant.decksUsed !== null && participant.decksUsed !== undefined
                 ? participant.decksUsed
                 : (participant.battlesPlayed !== null && participant.battlesPlayed !== undefined
                     ? participant.battlesPlayed
                     : null);
+            const boatAttacks = participant.boatAttacks !== null && participant.boatAttacks !== undefined ? participant.boatAttacks : null;
             
             player.scores[dateLabel] = finalWarPoints;
             player.decksUsed[dateLabel] = decksUsed;
+            player.boatAttacks[dateLabel] = boatAttacks;
             matchedParticipants++;
         });
     });
@@ -1206,6 +1241,169 @@ function sortTable(column, headerElement, forceDirection = null) {
     currentSort.column = column;
 }
 
+function renderFullTableIfActive() {
+    if (currentTab !== 'fulltable' || !latestData) return;
+    renderFullTable();
+}
+
+function renderFullTable() {
+    const head = document.getElementById('fullTableHead');
+    const body = document.getElementById('fullTableBody');
+    if (!head || !body) return;
+    document.querySelectorAll('.range-tab[data-context="fulltable"]').forEach(b => {
+        b.classList.toggle('active', (b.dataset.range || '').replace(/^fulltable-/, '') === fullTableRange);
+    });
+    const columns = getVisibleColumns(latestData.columns, fullTableRange);
+    const players = latestData.players.filter(p => (currentMembersOnly ? p.isCurrent : true));
+    const showP = document.getElementById('ftShowPoints')?.checked !== false;
+    const showD = document.getElementById('ftShowDecks')?.checked !== false;
+    const showB = document.getElementById('ftShowBoat')?.checked === true;
+
+    head.innerHTML = '';
+    body.innerHTML = '';
+    if (!columns.length) return;
+
+    const headerRow = document.createElement('tr');
+    headerRow.innerHTML = '<th class="sortable" data-column="player">Player</th><th class="sortable" data-column="role">Role</th>';
+    columns.forEach(col => {
+        const label = (col.displayLabel || col.label).split('\n')[0];
+        if (showP) { const th = document.createElement('th'); th.className = 'ft-col ft-p'; th.textContent = label + ' (P)'; headerRow.appendChild(th); }
+        if (showD) { const th = document.createElement('th'); th.className = 'ft-col ft-d'; th.textContent = label + ' (D)'; headerRow.appendChild(th); }
+        if (showB) { const th = document.createElement('th'); th.className = 'ft-col ft-b'; th.textContent = label + ' (B)'; headerRow.appendChild(th); }
+    });
+    head.appendChild(headerRow);
+
+    players.forEach(player => {
+        const row = document.createElement('tr');
+        row.dataset.playerTag = player.tag || '';
+        const nameCell = document.createElement('td');
+        const tagForUrl = (player.tag || '').replace(/^#/, '');
+        if (tagForUrl) {
+            const a = document.createElement('a');
+            a.href = `https://royaleapi.com/player/${tagForUrl}/`;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = player.name || player.tag;
+            nameCell.appendChild(a);
+        } else nameCell.textContent = player.name || '';
+        row.appendChild(nameCell);
+        const roleCell = document.createElement('td');
+        roleCell.innerHTML = `<span class="role-pill role-${escapeHtml((player.role || 'member').toLowerCase())}">${escapeHtml(formatRole(player.role))}</span>`;
+        row.appendChild(roleCell);
+        columns.forEach(column => {
+            if (showP) {
+                const cell = document.createElement('td');
+                cell.className = 'score-cell';
+                const v = player.scores[column.label];
+                if (v == null) { cell.textContent = '—'; cell.classList.add('score-na'); }
+                else { cell.textContent = v; cell.classList.add(getScoreClass(v)); }
+                row.appendChild(cell);
+            }
+            if (showD) {
+                const cell = document.createElement('td');
+                const v = player.decksUsed?.[column.label];
+                cell.textContent = v != null ? v : '—';
+                if (v == null) cell.classList.add('score-na');
+                row.appendChild(cell);
+            }
+            if (showB) {
+                const cell = document.createElement('td');
+                const v = player.boatAttacks?.[column.label];
+                cell.textContent = v != null ? v : '—';
+                if (v == null) cell.classList.add('score-na');
+                row.appendChild(cell);
+            }
+        });
+        body.appendChild(row);
+    });
+}
+
+function renderStrategyTabIfActive() {
+    if (currentTab !== 'strategy' || !latestData) return;
+    renderStrategyTab();
+}
+
+function renderStrategyTab() {
+    const container = document.getElementById('strategyTabContent');
+    if (!container) return;
+    const columns = getVisibleColumns(latestData.columns).slice(0, 24);
+    const players = latestData.players.filter(p => p.isCurrent);
+
+    const participantWeeks = [];
+    let totalPoints = 0, totalDecks = 0, totalBoat = 0, weeksWithBoat = 0;
+    players.forEach(p => {
+        columns.forEach(col => {
+            const pts = p.scores[col.label];
+            const decks = p.decksUsed?.[col.label];
+            const boat = p.boatAttacks?.[col.label];
+            if (pts != null) {
+                participantWeeks.push({ player: p, points: pts, decks: decks != null ? decks : 0, boat: boat != null ? boat : 0 });
+                totalPoints += pts;
+                if (decks != null) totalDecks += decks;
+                if (boat != null) { totalBoat += boat; weeksWithBoat++; }
+            }
+        });
+    });
+
+    const pointsPerDeck = totalDecks > 0 ? (totalPoints / totalDecks).toFixed(1) : '—';
+    const efficiencyList = [];
+    players.forEach(p => {
+        let sumP = 0, sumD = 0;
+        columns.forEach(col => {
+            const pts = p.scores[col.label];
+            const d = p.decksUsed?.[col.label];
+            if (pts != null && d != null && d > 0) {
+                sumP += pts;
+                sumD += d;
+            }
+        });
+        if (sumD > 0) efficiencyList.push({ name: p.name, tag: p.tag, ppd: sumP / sumD, totalPoints: sumP, totalDecks: sumD });
+    });
+    efficiencyList.sort((a, b) => b.ppd - a.ppd);
+    const topEfficiency = efficiencyList.slice(0, 8);
+
+    const participationByWeek = columns.slice(0, 12).map(col => {
+        const count = players.filter(p => p.scores[col.label] != null).length;
+        return { label: (col.displayLabel || col.label).split('(')[0].trim(), count, total: players.length };
+    }).reverse();
+
+    const boatNote = weeksWithBoat > 0
+        ? `Total boat attacks (across ${participantWeeks.length} participant-weeks): <strong>${formatNumber(totalBoat)}</strong>. Boat attacks help the clan boat; battles (decks used) earn war points.`
+        : 'Boat attack data is not available for most historical weeks; it appears when the API provides it.';
+
+    container.innerHTML = `
+        <div class="strategy-section">
+            <h2>Strategy &amp; insights</h2>
+            <p class="strategy-lead">Using war points and decks used we can see efficiency and participation. The API does not report win/loss per battle—only total points and number of battles (decks used).</p>
+        </div>
+        <div class="strategy-section">
+            <h3>Points per deck (efficiency)</h3>
+            <p>Higher = more war points per battle. Clan average: <strong>${pointsPerDeck}</strong> pts/deck.</p>
+            <ul class="strategy-list">
+                ${topEfficiency.length ? topEfficiency.map((e, i) => `<li><strong>${escapeHtml(e.name)}</strong>: ${e.ppd.toFixed(1)} pts/deck (${formatNumber(e.totalPoints)} pts, ${e.totalDecks} decks)</li>`).join('') : '<li class="muted">No data yet.</li>'}
+            </ul>
+        </div>
+        <div class="strategy-section">
+            <h3>Participation by week</h3>
+            <p>Number of members who participated (any points) in each of the last 12 weeks.</p>
+            <div class="participation-bars">
+                ${participationByWeek.map(p => {
+                    const pct = p.total ? Math.round((p.count / p.total) * 100) : 0;
+                    return `<div class="participation-row"><span class="part-label">${escapeHtml(p.label)}</span><div class="part-bar-wrap"><div class="part-bar" style="width:${pct}%"></div><span class="part-text">${p.count}/${p.total}</span></div></div>`;
+                }).join('')}
+            </div>
+        </div>
+        <div class="strategy-section">
+            <h3>Boat attacks</h3>
+            <p>${boatNote}</p>
+        </div>
+        <div class="strategy-section strategy-note">
+            <h3>About the data</h3>
+            <p><strong>Battles</strong> = decks used (each deck use is one battle). <strong>Wins/losses</strong> are not reported by the API—only total war points and battle count. So we can see who battles and how many points they earn, but not exact W–L records.</p>
+        </div>
+    `;
+}
+
 function getRoleRank(role) {
     switch ((role || '').toLowerCase()) {
         case 'leader':
@@ -1279,13 +1477,14 @@ const RANGE_MS = {
     lastyear: 365 * 24 * 60 * 60 * 1000
 };
 
-function getVisibleColumns(columns) {
-    if (currentRange === 'all') return columns ?? [];
+function getVisibleColumns(columns, rangeOverride) {
+    const range = rangeOverride ?? currentRange;
+    if (range === 'all') return columns ?? [];
     if (!columns?.length) return [];
 
     const now = new Date();
     const visible = columns[0]?.endDate ? [columns[0]] : [];
-    const cutoffMs = RANGE_MS[currentRange] ?? RANGE_MS.last4weeks;
+    const cutoffMs = RANGE_MS[range] ?? RANGE_MS.last4weeks;
     const cutoffDate = new Date(now.getTime() - cutoffMs);
 
     for (let i = 1; i < columns.length; i++) {
@@ -1310,6 +1509,8 @@ function renderView() {
     };
     renderTable(viewData);
     applySavedSortOrDefault(viewData.columns);
+    renderFullTableIfActive();
+    renderStrategyTabIfActive();
     renderHighlights(viewData);
     renderDashboard();
     renderPlayersPage(viewData);
@@ -1347,6 +1548,39 @@ function downloadWarTableCsv() {
     URL.revokeObjectURL(a.href);
 }
 
+function downloadFullTableCsv() {
+    if (!latestData?.columns?.length) return;
+    const showP = document.getElementById('ftShowPoints')?.checked !== false;
+    const showD = document.getElementById('ftShowDecks')?.checked !== false;
+    const showB = document.getElementById('ftShowBoat')?.checked === true;
+    const columns = getVisibleColumns(latestData.columns, fullTableRange);
+    const players = latestData.players.filter(p => (currentMembersOnly ? p.isCurrent : true));
+    const headerCells = ['Player Name', 'Tag', 'Role'];
+    columns.forEach(col => {
+        const label = (col.displayLabel || col.label).split('\n')[0];
+        if (showP) headerCells.push(label + ' (P)');
+        if (showD) headerCells.push(label + ' (D)');
+        if (showB) headerCells.push(label + ' (B)');
+    });
+    const rows = [headerCells.map(escapeCsvCell).join(',')];
+    players.forEach(player => {
+        const row = [player.name || '', player.tag || '', player.role || ''];
+        columns.forEach(col => {
+            if (showP) row.push(player.scores[col.label] != null ? player.scores[col.label] : '');
+            if (showD) row.push(player.decksUsed?.[col.label] != null ? player.decksUsed[col.label] : '');
+            if (showB) row.push(player.boatAttacks?.[col.label] != null ? player.boatAttacks[col.label] : '');
+        });
+        rows.push(row.map(escapeCsvCell).join(','));
+    });
+    const csv = rows.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gladiators-full-table-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
 function applySavedSortOrDefault(columns) {
     if (!columns.length) return;
     const currentColumnLabel = columns[0].label;
@@ -1366,27 +1600,21 @@ function applySavedSortOrDefault(columns) {
 
 function renderTabVisibility() {
     const tablePanel = document.getElementById('tab-table');
+    const fullTablePanel = document.getElementById('tab-fulltable');
+    const strategyPanel = document.getElementById('tab-strategy');
     const summaryPanel = document.getElementById('tab-summary');
     const playersPanel = document.getElementById('tab-players');
-    if (!tablePanel || !summaryPanel || !playersPanel) return;
-
-    if (currentTab === 'summary') {
-        summaryPanel.classList.add('active');
-        tablePanel.classList.remove('active');
-        playersPanel.classList.remove('active');
-        return;
-    }
-
-    if (currentTab === 'players') {
-        playersPanel.classList.add('active');
-        tablePanel.classList.remove('active');
-        summaryPanel.classList.remove('active');
-        return;
-    }
-
-    summaryPanel.classList.remove('active');
-    tablePanel.classList.add('active');
-    playersPanel.classList.remove('active');
+    [tablePanel, fullTablePanel, strategyPanel, summaryPanel, playersPanel].forEach(p => {
+        if (p) p.classList.remove('active');
+    });
+    const activeId = currentTab === 'table' ? 'tab-table'
+        : currentTab === 'fulltable' ? 'tab-fulltable'
+        : currentTab === 'strategy' ? 'tab-strategy'
+        : currentTab === 'summary' ? 'tab-summary'
+        : currentTab === 'players' ? 'tab-players'
+        : 'tab-table';
+    const activePanel = document.getElementById(activeId);
+    if (activePanel) activePanel.classList.add('active');
 }
 
 function setActiveTab(tab, updateUrl = false) {
@@ -1406,14 +1634,10 @@ function setActiveTab(tab, updateUrl = false) {
 }
 
 function applyRoute(pathname) {
-    if (pathname === '/summary') {
-        setActiveTab('summary');
-        return;
-    }
-    if (pathname === '/players') {
-        setActiveTab('players');
-        return;
-    }
+    if (pathname === '/summary') { setActiveTab('summary'); return; }
+    if (pathname === '/players') { setActiveTab('players'); return; }
+    if (pathname === '/full-table') { setActiveTab('fulltable'); return; }
+    if (pathname === '/strategy') { setActiveTab('strategy'); return; }
     setActiveTab('table', true);
 }
 
@@ -1690,6 +1914,66 @@ function renderDashboard() {
     const atRisk = participants.filter(item => item.score < WARNING_THRESHOLD).length;
     const participationRate = players.length ? Math.round((participants.length / players.length) * 100) : 0;
     const pointsNeeded = participants.reduce((sum, item) => sum + Math.max(0, WAR_REQUIREMENT - item.score), 0);
+
+    const streakColumns = allColumns.slice(0, 52);
+    const streakData = players.map(player => {
+        let onTrackRun = 0, maxOnTrack = 0, atRiskRun = 0, maxAtRisk = 0;
+        let currentOnTrack = 0, currentAtRisk = 0;
+        for (let i = 0; i < streakColumns.length; i++) {
+            const s = player.scores[streakColumns[i].label];
+            if (s != null) {
+                if (s >= WAR_REQUIREMENT) {
+                    onTrackRun++;
+                    currentOnTrack = onTrackRun;
+                    atRiskRun = 0;
+                    currentAtRisk = 0;
+                } else {
+                    onTrackRun = 0;
+                    if (s < WARNING_THRESHOLD) {
+                        atRiskRun++;
+                        currentAtRisk = atRiskRun;
+                    } else atRiskRun = 0;
+                }
+                maxOnTrack = Math.max(maxOnTrack, onTrackRun);
+                maxAtRisk = Math.max(maxAtRisk, atRiskRun);
+            } else {
+                onTrackRun = 0;
+                atRiskRun = 0;
+            }
+        }
+        return {
+            name: player.name,
+            tag: player.tag,
+            role: player.role,
+            currentOnTrack,
+            maxOnTrack,
+            currentAtRisk,
+            maxAtRisk
+        };
+    });
+    const topOnTrack = streakData.filter(s => s.maxOnTrack > 0).sort((a, b) => b.maxOnTrack - a.maxOnTrack).slice(0, 6);
+    const atRiskNow = streakData.filter(s => s.currentAtRisk > 0).sort((a, b) => b.currentAtRisk - a.currentAtRisk).slice(0, 6);
+
+    const streaksEl = document.getElementById('streaksCard');
+    if (streaksEl) {
+        streaksEl.innerHTML = `
+            <h3>Streaks <span class="info-icon" data-tooltip="Longest run of 1600+ weeks and current run of weeks below 800.">?</span></h3>
+            <div class="streaks-grid">
+                <div class="streaks-block">
+                    <h4>Longest on-track (1600+)</h4>
+                    <ul class="list">
+                        ${topOnTrack.length ? topOnTrack.map(s => `<li class="list-item"><strong>${escapeHtml(s.name)}</strong>: ${s.maxOnTrack} wk${s.maxOnTrack !== 1 ? 's' : ''}</li>`).join('') : '<li class="list-item muted">No streaks yet.</li>'}
+                    </ul>
+                </div>
+                <div class="streaks-block">
+                    <h4>Current at-risk streak (&lt;800)</h4>
+                    <ul class="list">
+                        ${atRiskNow.length ? atRiskNow.map(s => `<li class="list-item"><strong>${escapeHtml(s.name)}</strong>: ${s.currentAtRisk} wk${s.currentAtRisk !== 1 ? 's' : ''}</li>`).join('') : '<li class="list-item muted">No one.</li>'}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
 
     if (clanStatsEl) {
         clanStatsEl.innerHTML = `
