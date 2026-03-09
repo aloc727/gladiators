@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v1.32.0';
+const UI_VERSION = 'v1.33.0';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -1155,7 +1155,24 @@ function processWarData(members, warLog, options = {}) {
         });
     });
 
-    // If current week column matches last week (all or most scores identical), API likely returned stale data – show N/A for current week
+    // Current week column: clan members who didn't participate show 0 (not N/A)
+    const currentWeekCol = columns[0];
+    if (currentWeekCol && filteredColumns.find(c => c.label === currentWeekCol.label)) {
+        const col0 = currentWeekCol.label;
+        const isCurrentWeekColumn = hasCurrentWeek || !(dateMergedWars[0] && dateMergedWars[0].participants && dateMergedWars[0].participants.length);
+        if (isCurrentWeekColumn) {
+            playersMap.forEach(player => {
+                if (player.isCurrent && (player.scores[col0] === null || player.scores[col0] === undefined)) {
+                    player.scores[col0] = 0;
+                    player.decksUsed[col0] = 0;
+                    player.boatAttacks[col0] = 0;
+                    player.trophies[col0] = 0;
+                }
+            });
+        }
+    }
+
+    // If current week column matches last week (all or most scores identical), API likely returned stale data – show 0 for current week (not N/A)
     if (hasCurrentWeek && columns.length >= 2 && filteredColumns.find(c => c.label === columns[0].label)) {
         const col0 = columns[0].label;
         const col1 = columns[1].label;
@@ -1172,12 +1189,12 @@ function processWarData(members, warLog, options = {}) {
         const majoritySame = totalCount > 0 && (sameCount === totalCount || (totalCount >= 5 && sameCount >= 0.85 * totalCount));
         if (majoritySame) {
             playersMap.forEach(player => {
-                player.scores[col0] = null;
-                player.decksUsed[col0] = null;
-                player.boatAttacks[col0] = null;
-                player.trophies[col0] = null;
+                player.scores[col0] = 0;
+                player.decksUsed[col0] = 0;
+                player.boatAttacks[col0] = 0;
+                player.trophies[col0] = 0;
             });
-            console.log('📥 Current week data matched last week (same or majority) – showing N/A until API updates');
+            console.log('📥 Current week data matched last week (same or majority) – showing 0 until API updates');
         }
     }
 
