@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v2.0.2';
+const UI_VERSION = 'v2.0.3';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -1693,25 +1693,30 @@ function renderStrategyTab() {
     try {
         renderStrategyTabContent(container);
     } catch (err) {
+        const msg = err?.message || String(err);
         console.error('Strategy tab render error:', err);
         container.innerHTML = `
             <div class="strategy-error" role="alert">
                 <p>Could not load strategy view. <a href="#" onclick="location.reload(); return false;">Reload the page</a> to try again.</p>
+                <p class="strategy-error-detail">Error: ${escapeHtml(msg)}</p>
             </div>`;
     }
 }
 
 function renderStrategyTabContent(container) {
-    const columns = getVisibleColumns(latestData.columns).slice(0, 24);
-    const players = (latestData.players || []).filter(p => p.isCurrent);
+    const columns = (getVisibleColumns(latestData?.columns) || []).slice(0, 24);
+    const rawPlayers = Array.isArray(latestData?.players) ? latestData.players : [];
+    const players = rawPlayers.filter(p => p && p.isCurrent);
 
     const participantWeeks = [];
     let totalPoints = 0, totalDecks = 0, totalBoat = 0, weeksWithBoat = 0;
     players.forEach(p => {
+        const scores = p.scores || {};
         columns.forEach(col => {
-            const pts = p.scores[col.label];
-            const decks = p.decksUsed?.[col.label];
-            const boat = p.boatAttacks?.[col.label];
+            const label = col?.label;
+            const pts = label != null ? scores[label] : undefined;
+            const decks = p.decksUsed?.[label];
+            const boat = p.boatAttacks?.[label];
             if (pts != null) {
                 participantWeeks.push({ player: p, points: pts, decks: decks != null ? decks : 0, boat: boat != null ? boat : 0 });
                 totalPoints += pts;
@@ -1724,10 +1729,12 @@ function renderStrategyTabContent(container) {
     const pointsPerDeck = totalDecks > 0 ? (totalPoints / totalDecks).toFixed(1) : '—';
     const efficiencyList = [];
     players.forEach(p => {
+        const scores = p.scores || {};
         let sumP = 0, sumD = 0;
         columns.forEach(col => {
-            const pts = p.scores[col.label];
-            const d = p.decksUsed?.[col.label];
+            const label = col?.label;
+            const pts = label != null ? scores[label] : undefined;
+            const d = p.decksUsed?.[label];
             if (pts != null && d != null && d > 0) {
                 sumP += pts;
                 sumD += d;
@@ -1739,25 +1746,60 @@ function renderStrategyTabContent(container) {
     const topEfficiency = efficiencyList.slice(0, 8);
 
     const participationByWeek = columns.slice(0, 12).map(col => {
+        const label = col?.label;
         const count = players.filter(p => {
-            const s = p.scores[col.label];
+            const s = label != null ? (p.scores || {})[label] : undefined;
             return s != null && s > 0;
         }).length;
-        const total = getWeekMemberCount(col.war?.seasonId, col.war?.periodIndex) ?? players.length;
-        const rawLabel = (col.displayLabel || col.label).split('(')[0].trim();
-        const label = rawLabel.replace(/^Current Week - \s*/i, '');
-        return { label, count, total };
+        const total = getWeekMemberCount(col?.war?.seasonId, col?.war?.periodIndex) ?? players.length;
+        const rawLabel = (col?.displayLabel || col?.label || '').split('(')[0].trim();
+        const weekLabel = rawLabel.replace(/^Current Week - \s*/i, '');
+        const pct = total > 0 ? (count / total) * 100 : 0;
+        return {
+            label: weekLabel,
+            count,
+            total,
+            pct,
+            seasonId: col?.war?.seasonId ?? null,
+            periodIndex: col?.war?.periodIndex ?? null
+        };
     }).reverse();
 
+    const participationWithPct = participationByWeek.filter(w => w.total > 0);
+    const avgParticipation = participationWithPct.length
+        ? (participationWithPct.reduce((s, w) => s + w.pct, 0) / participationWithPct.length).toFixed(1)
+        : '—';
+    const bestWeek = participationWithPct.length
+        ? participationWithPct.reduce((a, w) => (w.pct > a.pct ? w : a), participationWithPct[0])
+        : null;
+    const worstWeek = participationWithPct.length
+        ? participationWithPct.reduce((a, w) => (w.pct < a.pct ? w : a), participationWithPct[0])
+        : null;
+
+    const participationBySeason = [];
+    const seasonMap = new Map();
+    participationByWeek.forEach(w => {
+        const sid = w.seasonId != null ? String(w.seasonId) : '?';
+        if (!seasonMap.has(sid)) seasonMap.set(sid, []);
+        seasonMap.get(sid).push(w);
+    });
+    seasonMap.forEach((weeks, seasonId) => {
+        weeks.sort((a, b) => (a.periodIndex ?? 0) - (b.periodIndex ?? 0));
+        participationBySeason.push({ seasonId, weeks });
+    });
+    participationBySeason.sort((a, b) => Number(b.seasonId) - Number(a.seasonId));
+
+    const SEGMENTS = 10;
     const boatByWeek = columns.slice(0, 12).map(col => {
+        const label = col?.label;
         let boat = 0;
         players.forEach(p => {
-            const v = p.boatAttacks?.[col.label];
+            const v = label != null ? p.boatAttacks?.[label] : undefined;
             if (v != null) boat += v;
         });
-        const rawLabel = (col.displayLabel || col.label).split('(')[0].trim();
-        const label = rawLabel.replace(/^Current Week - \s*/i, '');
-        return { label, boat };
+        const rawLabel = (col?.displayLabel || col?.label || '').split('(')[0].trim();
+        const weekLabel = rawLabel.replace(/^Current Week - \s*/i, '');
+        return { label: weekLabel, boat };
     }).reverse();
 
     const totalDonations = players.reduce((sum, p) => sum + (p.donations || 0), 0);
@@ -1938,14 +1980,64 @@ function renderStrategyTabContent(container) {
                 }).join('')}
             </div>` : '<p class="muted">No data yet.</p>'}
         </div>
-        <div class="strategy-section">
-            <h3>Participation by week</h3>
-            <p>Number of members who participated (points &gt; 0) in each of the last 12 weeks.</p>
-            <div class="participation-bars">
-                ${participationByWeek.map(p => {
-                    const pct = p.total ? Math.round((p.count / p.total) * 100) : 0;
-                    return `<div class="participation-row"><span class="part-label">${escapeHtml(p.label)}</span><div class="part-bar-wrap"><div class="part-bar" style="width:${pct}%"></div><span class="part-text">${p.count}/${p.total}</span></div></div>`;
-                }).join('')}
+        <div class="strategy-section participation-dashboard">
+            <h3>Participation dashboard</h3>
+            <p class="strategy-lead">War participation (members with points &gt; 0) by week. Grouped by season with progress timeline.</p>
+            <div class="participation-summary-cards">
+                <div class="participation-card">
+                    <span class="participation-card-value">${avgParticipation}%</span>
+                    <span class="participation-card-label">Average participation</span>
+                </div>
+                <div class="participation-card participation-card-best">
+                    <span class="participation-card-value">${bestWeek ? Math.round(bestWeek.pct) + '%' : '—'}</span>
+                    <span class="participation-card-label">Best week</span>
+                    ${bestWeek ? `<span class="participation-card-meta">${escapeHtml(bestWeek.label)} (${bestWeek.count}/${bestWeek.total})</span>` : ''}
+                </div>
+                <div class="participation-card participation-card-worst">
+                    <span class="participation-card-value">${worstWeek ? Math.round(worstWeek.pct) + '%' : '—'}</span>
+                    <span class="participation-card-label">Worst week</span>
+                    ${worstWeek ? `<span class="participation-card-meta">${escapeHtml(worstWeek.label)} (${worstWeek.count}/${worstWeek.total})</span>` : ''}
+                </div>
+            </div>
+            <div class="participation-heatmap-wrap">
+                <h4 class="participation-subtitle">Participation heatmap</h4>
+                <div class="participation-heatmap" role="img" aria-label="Participation rate by season and week">
+                    ${participationBySeason.map(seg => `
+                        <div class="heatmap-season-row">
+                            <span class="heatmap-season-label">Season ${escapeHtml(seg.seasonId)}</span>
+                            <div class="heatmap-cells">
+                                ${seg.weeks.map(w => {
+                                    const pct = w.total ? (w.count / w.total) * 100 : 0;
+                                    const intensity = Math.min(100, Math.round(pct));
+                                    return `<span class="heatmap-cell" style="--pct:${intensity}" title="${escapeHtml(w.label)}: ${w.count}/${w.total} (${Math.round(pct)}%)">${w.periodIndex ?? '?'}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <p class="participation-heatmap-legend">Darker = higher participation. Hover for week details.</p>
+            </div>
+            <div class="participation-timeline-wrap">
+                <h4 class="participation-subtitle">Participation progress by season</h4>
+                <div class="participation-timeline">
+                    ${participationBySeason.map(seg => `
+                        <div class="timeline-season">
+                            <h5 class="timeline-season-title">Season ${escapeHtml(seg.seasonId)}</h5>
+                            <ul class="timeline-weeks">
+                                ${seg.weeks.map(w => {
+                                    const total = w.total || 1;
+                                    const filled = Math.min(SEGMENTS, Math.round((SEGMENTS * w.count) / total));
+                                    const blocks = '▰'.repeat(filled) + '□'.repeat(SEGMENTS - filled);
+                                    return `<li class="timeline-week">
+                                        <span class="timeline-week-label">Week ${w.periodIndex ?? '?'}</span>
+                                        <span class="timeline-week-bar" aria-label="${w.count} of ${w.total} participated">${blocks}</span>
+                                        <span class="timeline-week-count">${w.count}</span>
+                                    </li>`;
+                                }).join('')}
+                            </ul>
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         </div>
         <div class="strategy-section">
