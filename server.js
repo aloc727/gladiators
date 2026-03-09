@@ -1165,8 +1165,7 @@ const server = http.createServer((req, res) => {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
-            const from = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
-            const from = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
+            const fromAddress = process.env.BUG_REPORT_FROM || 'Gladiators Bug Reporter <onboarding@resend.dev>';
             if (!configured) {
                 res.writeHead(503, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Bug report not configured' }));
@@ -1195,7 +1194,7 @@ const server = http.createServer((req, res) => {
                 const { Resend } = require('resend');
                 const resend = new Resend(apiKey);
                 const { data, error } = await resend.emails.send({
-                    from,
+                    from: fromAddress,
                     to: [toEmail],
                     subject: `[Gladiators] Bug report ${new Date().toISOString().slice(0, 19)}`,
                     text: report,
