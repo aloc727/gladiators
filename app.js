@@ -74,7 +74,7 @@ function initCookieConsent() {
 
 // Optional override for the current war label (leave empty to use data labels)
 const CURRENT_WAR_LABEL = '';
-const UI_VERSION = 'v2.0.1';
+const UI_VERSION = 'v2.0.2';
 
 /** Escape string for safe insertion into HTML / attributes (XSS prevention) */
 function escapeHtml(str) {
@@ -1298,9 +1298,15 @@ function processWarData(members, warLog, options = {}) {
 }
 
 function renderTable(data) {
-    const { players, columns } = data;
     const tableHead = document.getElementById('tableHead');
     const tableBody = document.getElementById('tableBody');
+    if (!tableHead || !tableBody) return;
+    const players = Array.isArray(data?.players) ? data.players : [];
+    const columns = Array.isArray(data?.columns) ? data.columns : [];
+    if (!columns.length) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="muted">No week data yet.</td></tr>';
+        return;
+    }
 
     // Clear existing content
     tableHead.innerHTML = '';
@@ -1356,11 +1362,12 @@ function renderTable(data) {
 
     tableHead.appendChild(headerRow);
 
-    // Create data rows
+    // Create data rows (one bad player doesn't break the whole table)
     players.forEach(player => {
-        const row = document.createElement('tr');
-        row.dataset.playerTag = player.tag || '';
-        row.dataset.playerName = player.name || '';
+        try {
+            const row = document.createElement('tr');
+            row.dataset.playerTag = player.tag || '';
+            row.dataset.playerName = player.name || '';
 
         // Player name: link to RoyaleAPI (tag without #)
         const nameCell = document.createElement('td');
@@ -1416,7 +1423,7 @@ function renderTable(data) {
         // Average: ignore N/A weeks, count 0 as 0
         const avgCell = document.createElement('td');
         avgCell.className = 'score-cell';
-        const avg = getPlayerAverage(player.scores, columns);
+        const avg = getPlayerAverage(player.scores || {}, columns);
         if (avg === null) {
             avgCell.textContent = 'N/A';
             avgCell.classList.add('score-na');
@@ -1435,7 +1442,7 @@ function renderTable(data) {
         columns.forEach(column => {
             const scoreCell = document.createElement('td');
             scoreCell.className = 'score-cell';
-            const value = player.scores[column.label];
+            const value = player.scores?.[column?.label];
             if (value === null || value === undefined) {
                 scoreCell.textContent = 'N/A';
                 scoreCell.classList.add('score-na');
@@ -1450,6 +1457,9 @@ function renderTable(data) {
             row.classList.add('former-member');
         }
         tableBody.appendChild(row);
+        } catch (e) {
+            console.error('Table row error:', player?.name ?? player?.tag, e);
+        }
     });
 
     // Store data for sorting
@@ -1533,30 +1543,33 @@ function sortTable(column, headerElement, forceDirection = null) {
 
 function renderFullTableIfActive() {
     if (currentTab !== 'fulltable') return;
-    if (latestData) renderFullTable();
+    if (!latestData) { showFullTableLoading(); return; }
+    try { renderFullTable(); } catch (e) { console.error('renderFullTable', e); showFullTableLoading(); }
 }
 
 function renderFullTable() {
     const head = document.getElementById('fullTableHead');
     const body = document.getElementById('fullTableBody');
     if (!head || !body) return;
+    const columns = getVisibleColumns(latestData?.columns, fullTableRange) || [];
+    const players = (latestData?.players || []).filter(p => (currentMembersOnly ? p.isCurrent : true));
     document.querySelectorAll('.range-tab[data-context="fulltable"]').forEach(b => {
         b.classList.toggle('active', (b.dataset.range || '').replace(/^fulltable-/, '') === fullTableRange);
     });
-    // Same processed data as War Table – current-week placeholder and "same as last week" N/A logic apply here too
-    const columns = getVisibleColumns(latestData.columns, fullTableRange);
-    const players = latestData.players.filter(p => (currentMembersOnly ? p.isCurrent : true));
     const showP = document.getElementById('ftShowPoints')?.checked !== false;
     const showD = document.getElementById('ftShowDecks')?.checked !== false;
     const showB = document.getElementById('ftShowBoat')?.checked === true;
 
     head.innerHTML = '';
     body.innerHTML = '';
-    if (!columns.length) return;
+    if (!columns.length) {
+        body.innerHTML = '<tr><td colspan="5" class="muted">No week data yet.</td></tr>';
+        return;
+    }
 
     const headerRow = document.createElement('tr');
     headerRow.innerHTML = '<th class="sortable" data-column="player">Player</th><th class="sortable" data-column="role">Role</th>';
-    columns.forEach(col => {
+        columns.forEach(col => {
         const label = (col.displayLabel || col.label).split('\n')[0];
         if (showP) { const th = document.createElement('th'); th.className = 'ft-col ft-p'; th.textContent = label + ' (P)'; headerRow.appendChild(th); }
         if (showD) { const th = document.createElement('th'); th.className = 'ft-col ft-d'; th.textContent = label + ' (D)'; headerRow.appendChild(th); }
@@ -1565,6 +1578,7 @@ function renderFullTable() {
     head.appendChild(headerRow);
 
     players.forEach(player => {
+        try {
         const row = document.createElement('tr');
         row.dataset.playerTag = player.tag || '';
         const nameCell = document.createElement('td');
@@ -1585,40 +1599,111 @@ function renderFullTable() {
             if (showP) {
                 const cell = document.createElement('td');
                 cell.className = 'score-cell';
-                const v = player.scores[column.label];
+                const v = player.scores?.[column?.label];
                 if (v == null) { cell.textContent = '—'; cell.classList.add('score-na'); }
                 else { cell.textContent = v; cell.classList.add(getScoreClass(v)); }
                 row.appendChild(cell);
             }
             if (showD) {
                 const cell = document.createElement('td');
-                const v = player.decksUsed?.[column.label];
+                const v = player.decksUsed?.[column?.label];
                 cell.textContent = v != null ? v : '—';
                 if (v == null) cell.classList.add('score-na');
                 row.appendChild(cell);
             }
             if (showB) {
                 const cell = document.createElement('td');
-                const v = player.boatAttacks?.[column.label];
+                const v = player.boatAttacks?.[column?.label];
                 cell.textContent = v != null ? v : '—';
                 if (v == null) cell.classList.add('score-na');
                 row.appendChild(cell);
             }
         });
         body.appendChild(row);
+        } catch (e) {
+            console.error('Full table row error:', player?.name ?? player?.tag, e);
+        }
     });
 }
 
 function renderStrategyTabIfActive() {
-    if (currentTab !== 'strategy' || !latestData) return;
+    if (currentTab !== 'strategy') return;
+    const container = document.getElementById('strategyTabContent');
+    if (!container) return;
+    if (!latestData) {
+        showStrategyLoading(container);
+        return;
+    }
     renderStrategyTab();
+}
+
+function getPageLoadingHtml(message) {
+    return `<div class="page-loading" aria-live="polite">
+        <div class="page-loading-spinner"></div>
+        <p class="page-loading-text">${escapeHtml(message)}</p>
+    </div>`;
+}
+
+function showStrategyLoading(container) {
+    if (!container) return;
+    container.innerHTML = getPageLoadingHtml('Loading strategy & insights…');
+}
+
+function showTableLoading() {
+    const tableBody = document.getElementById('tableBody');
+    if (!tableBody) return;
+    tableBody.innerHTML = `<tr><td colspan="20" class="page-loading-cell">${getPageLoadingHtml('Loading war table…')}</td></tr>`;
+}
+
+function showFullTableLoading() {
+    const head = document.getElementById('fullTableHead');
+    const body = document.getElementById('fullTableBody');
+    if (head) head.innerHTML = '<tr><th>Player</th></tr>';
+    if (body) body.innerHTML = `<tr><td colspan="20" class="page-loading-cell">${getPageLoadingHtml('Loading full table…')}</td></tr>`;
+}
+
+function showSummaryLoading() {
+    const highlightsEl = document.getElementById('highlights');
+    const clanStatsEl = document.getElementById('clanStats');
+    if (highlightsEl) highlightsEl.innerHTML = getPageLoadingHtml('Loading summary…');
+    if (clanStatsEl) clanStatsEl.innerHTML = getPageLoadingHtml('Loading…');
+    ['streaksCard', 'strategyBoard', 'recentPromotionsCard', 'recentDemotionsCard', 'promotionBoard', 'demotionBoard'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<p class="page-loading-inline">Loading…</p>';
+    });
+}
+
+function showPlayersLoading() {
+    const topEl = document.getElementById('topPerformersTable');
+    const improvementEl = document.getElementById('improvementTable');
+    const leaderboardEl = document.getElementById('leaderboardTable');
+    const msg = getPageLoadingHtml('Loading players…');
+    if (topEl) topEl.innerHTML = msg;
+    if (improvementEl) improvementEl.innerHTML = msg;
+    if (leaderboardEl) leaderboardEl.innerHTML = msg;
 }
 
 function renderStrategyTab() {
     const container = document.getElementById('strategyTabContent');
     if (!container) return;
+    if (!latestData?.columns?.length || !Array.isArray(latestData.players)) {
+        showStrategyLoading(container);
+        return;
+    }
+    try {
+        renderStrategyTabContent(container);
+    } catch (err) {
+        console.error('Strategy tab render error:', err);
+        container.innerHTML = `
+            <div class="strategy-error" role="alert">
+                <p>Could not load strategy view. <a href="#" onclick="location.reload(); return false;">Reload the page</a> to try again.</p>
+            </div>`;
+    }
+}
+
+function renderStrategyTabContent(container) {
     const columns = getVisibleColumns(latestData.columns).slice(0, 24);
-    const players = latestData.players.filter(p => p.isCurrent);
+    const players = (latestData.players || []).filter(p => p.isCurrent);
 
     const participantWeeks = [];
     let totalPoints = 0, totalDecks = 0, totalBoat = 0, weeksWithBoat = 0;
@@ -1981,19 +2066,25 @@ function getVisibleColumns(columns, rangeOverride) {
 }
 
 function renderView() {
-    if (!latestData) return;
-    const columns = getVisibleColumns(latestData.columns);
+    const columns = getVisibleColumns(latestData?.columns || []);
     const viewData = {
-        players: latestData.players.filter(player => (currentMembersOnly ? player.isCurrent : true)),
+        players: (latestData?.players || []).filter(player => (currentMembersOnly ? player.isCurrent : true)),
         columns
     };
-    renderTable(viewData);
-    applySavedSortOrDefault(viewData.columns);
+    if (!latestData) {
+        if (currentTab === 'table') showTableLoading();
+        if (currentTab === 'fulltable') showFullTableLoading();
+        if (currentTab === 'summary') showSummaryLoading();
+        if (currentTab === 'players') showPlayersLoading();
+        renderTabVisibility();
+        return;
+    }
+    try { renderTable(viewData); applySavedSortOrDefault(viewData.columns); } catch (e) { console.error('renderTable', e); showTableLoading(); }
     renderFullTableIfActive();
     renderStrategyTabIfActive();
-    renderHighlights(viewData);
-    renderDashboard();
-    renderPlayersPage(viewData);
+    try { renderHighlights(viewData); } catch (e) { console.error('renderHighlights', e); }
+    try { renderDashboard(); } catch (e) { console.error('renderDashboard', e); }
+    try { renderPlayersPage(viewData); } catch (e) { console.error('renderPlayersPage', e); showPlayersLoading(); }
     renderTabVisibility();
 }
 
@@ -2103,6 +2194,12 @@ function setActiveTab(tab, updateUrl = false) {
         button.classList.toggle('active', button.dataset.tab === tab);
     });
     renderTabVisibility();
+    if (!latestData) {
+        if (tab === 'table') showTableLoading();
+        else if (tab === 'fulltable') showFullTableLoading();
+        else if (tab === 'summary') showSummaryLoading();
+        else if (tab === 'players') showPlayersLoading();
+    }
     if (tab === 'strategy') renderStrategyTabIfActive();
     if (tab === 'fulltable') renderFullTableIfActive();
 
@@ -2164,64 +2261,82 @@ function formatPromotionDate(isoString) {
     return formatShortDate(isoString);
 }
 
+function setSectionSafe(el, fn, fallbackHtml) {
+    if (!el) return;
+    try {
+        fn(el);
+    } catch (e) {
+        console.error('Section render error:', e);
+        el.innerHTML = fallbackHtml || '<p class="section-fallback">This section couldn’t load.</p>';
+    }
+}
+
+const sectionFallback = '<p class="section-fallback">This section couldn’t load.</p>';
+
 function renderHighlights(data) {
-    const { players, columns } = data;
     const highlightsEl = document.getElementById('highlights');
     if (!highlightsEl) return;
-
-    highlightsEl.innerHTML = '';
-    if (!columns.length) return;
-
-    const currentColumn = columns[0];
-    const scores = players
-        .map(player => ({
-            name: player.name,
-            role: player.role,
-            score: player.scores[currentColumn.label]
-        }))
-        .filter(item => item.score !== null && item.score !== undefined);
-
-    const clanTotal = scores.reduce((sum, item) => sum + item.score, 0);
-    const avgScore = scores.length ? Math.round(clanTotal / scores.length) : 0;
-
-    highlightsEl.innerHTML = `
-        <div class="highlight-card">
-            <h4>Current Week Total</h4>
-            <p>${clanTotal} points</p>
-        </div>
-        <div class="highlight-card">
-            <h4>Current Week Average</h4>
-            <p>${avgScore} points</p>
-        </div>
-    `;
+    setSectionSafe(highlightsEl, () => {
+        const players = Array.isArray(data?.players) ? data.players : [];
+        const columns = Array.isArray(data?.columns) ? data.columns : [];
+        if (!columns.length) {
+            highlightsEl.innerHTML = '';
+            return;
+        }
+        const currentColumn = columns[0];
+        const scores = players
+            .map(player => ({
+                name: player.name,
+                role: player.role,
+                score: player.scores?.[currentColumn?.label]
+            }))
+            .filter(item => item.score !== null && item.score !== undefined);
+        const clanTotal = scores.reduce((sum, item) => sum + item.score, 0);
+        const avgScore = scores.length ? Math.round(clanTotal / scores.length) : 0;
+        highlightsEl.innerHTML = `
+            <div class="highlight-card">
+                <h4>Current Week Total</h4>
+                <p>${clanTotal} points</p>
+            </div>
+            <div class="highlight-card">
+                <h4>Current Week Average</h4>
+                <p>${avgScore} points</p>
+            </div>
+        `;
+    }, sectionFallback);
 }
 
 function renderPlayersPage(data) {
-    const { players } = data;
     const topEl = document.getElementById('topPerformersTable');
     const improvementEl = document.getElementById('improvementTable');
     const leaderboardEl = document.getElementById('leaderboardTable');
     if (!topEl || !improvementEl || !leaderboardEl) return;
-    const fullColumns = latestData?.columns || [];
-    if (!fullColumns.length) return;
+    const players = Array.isArray(data?.players) ? data.players : [];
+    const fullColumns = Array.isArray(latestData?.columns) ? latestData.columns : [];
+    if (!fullColumns.length) {
+        topEl.innerHTML = '<p class="muted">No week data yet.</p>';
+        improvementEl.innerHTML = '<p class="muted">No week data yet.</p>';
+        leaderboardEl.innerHTML = '<p class="muted">No week data yet.</p>';
+        return;
+    }
 
     const currentColumn = fullColumns[0];
+    const previousColumn = fullColumns[1];
     const topPerformers = [...players]
         .map(player => ({
             name: player.name,
             tag: player.tag || '',
-            score: player.scores[currentColumn.label]
+            score: player.scores?.[currentColumn?.label]
         }))
         .filter(item => item.score !== null && item.score !== undefined)
         .sort((a, b) => b.score - a.score)
         .slice(0, 10);
 
-    const previousColumn = fullColumns[1];
     const improvements = previousColumn ? players
         .map(player => ({
             name: player.name,
             tag: player.tag || '',
-            delta: (player.scores[currentColumn.label] ?? 0) - (player.scores[previousColumn.label] ?? 0)
+            delta: (player.scores?.[currentColumn?.label] ?? 0) - (player.scores?.[previousColumn?.label] ?? 0)
         }))
         .filter(item => !Number.isNaN(item.delta))
         .sort((a, b) => b.delta - a.delta)
@@ -2231,7 +2346,7 @@ function renderPlayersPage(data) {
     const leaderboard = leaderboardColumns.length ? players
         .map(player => {
             const scores = leaderboardColumns
-                .map(col => player.scores[col.label])
+                .map(col => player.scores?.[col?.label])
                 .filter(score => score !== null && score !== undefined);
             const total = scores.reduce((sum, score) => sum + score, 0);
             const weeks = scores.length;
@@ -2247,7 +2362,8 @@ function renderPlayersPage(data) {
         .sort((a, b) => b.total - a.total)
         .slice(0, 10) : [];
 
-    topEl.innerHTML = topPerformers.length ? `
+    setSectionSafe(topEl, () => {
+        topEl.innerHTML = topPerformers.length ? `
         <table>
             <thead>
                 <tr>
@@ -2268,8 +2384,10 @@ function renderPlayersPage(data) {
             </tbody>
         </table>
     ` : '<p>No current week data yet.</p>';
+    }, sectionFallback);
 
-    improvementEl.innerHTML = improvements.length ? `
+    setSectionSafe(improvementEl, () => {
+        improvementEl.innerHTML = improvements.length ? `
         <table>
             <thead>
                 <tr>
@@ -2290,8 +2408,10 @@ function renderPlayersPage(data) {
             </tbody>
         </table>
     ` : '<p>No week-over-week data yet.</p>';
+    }, sectionFallback);
 
-    leaderboardEl.innerHTML = leaderboard.length ? `
+    setSectionSafe(leaderboardEl, () => {
+        leaderboardEl.innerHTML = leaderboard.length ? `
         <table>
             <thead>
                 <tr>
@@ -2314,6 +2434,7 @@ function renderPlayersPage(data) {
             </tbody>
         </table>
     ` : '<p>No recent history yet.</p>';
+    }, sectionFallback);
 
     [topEl, improvementEl, leaderboardEl].forEach(container => {
         container.querySelectorAll('tbody tr').forEach(row => {
@@ -2370,19 +2491,23 @@ function getDemotionThreshold() {
 }
 
 function renderDashboard() {
-    if (!latestData?.columns?.length) return;
+    const columns = latestData?.columns;
+    const players = (latestData?.players || []).filter(player => currentMembersOnly ? player.isCurrent : true);
+    if (!Array.isArray(columns) || !columns.length) return;
     const clanStatsEl = document.getElementById('clanStats');
     const promotionEl = document.getElementById('promotionBoard');
     const demotionEl = document.getElementById('demotionBoard');
     const strategyEl = document.getElementById('strategyBoard');
+    const streaksEl = document.getElementById('streaksCard');
+    const recentPromotionsEl = document.getElementById('recentPromotionsCard');
+    const recentDemotionsEl = document.getElementById('recentDemotionsCard');
 
-    const allColumns = latestData.columns;
+    const allColumns = latestData.columns || [];
     // Snapshot and momentum use last completed week until the new week starts (same as demotion/promotion).
     const snapshotColumn = (allColumns[0] && allColumns[0].isCurrentWeek && allColumns.length > 1)
         ? allColumns[1]
         : allColumns[0];
     const currentColumn = snapshotColumn;
-    const players = latestData.players.filter(player => currentMembersOnly ? player.isCurrent : true);
 
     const currentScores = players.map(player => ({
         name: player.name,
@@ -2445,8 +2570,7 @@ function renderDashboard() {
     const topOnTrack = tiedAtMax.length > 1 ? tiedAtMax : sortedOnTrack.slice(0, 10);
     const atRiskNow = streakData.filter(s => s.currentAtRisk > 0).sort((a, b) => b.currentAtRisk - a.currentAtRisk).slice(0, 6);
 
-    const streaksEl = document.getElementById('streaksCard');
-    if (streaksEl) {
+    setSectionSafe(streaksEl, () => {
         streaksEl.innerHTML = `
             <h3>Streaks <span class="info-icon" data-tooltip="Longest run of 1600+ weeks and current run of weeks below 800.">?</span></h3>
             <div class="streaks-grid">
@@ -2464,9 +2588,9 @@ function renderDashboard() {
                 </div>
             </div>
         `;
-    }
+    }, sectionFallback);
 
-    if (clanStatsEl) {
+    setSectionSafe(clanStatsEl, () => {
         clanStatsEl.innerHTML = `
             <h3>Clan War Snapshot</h3>
             <div class="stat-grid">
@@ -2480,7 +2604,7 @@ function renderDashboard() {
                 <div class="stat-item">Points Needed to Reach 1600: <strong>${pointsNeeded}</strong></div>
             </div>
         `;
-    }
+    }, sectionFallback);
 
     const promotionsData = latestData.promotions || {};
     const recentPromotionsMap = new Map();
@@ -2504,7 +2628,7 @@ function renderDashboard() {
         })
         .slice(0, 10);
 
-    if (promotionEl) {
+    setSectionSafe(promotionEl, () => {
         promotionEl.innerHTML = `
             <h3>Promotion Ready <span class="info-icon" data-tooltip="Members and elders with 12 straight completed weeks at 1600+ (no N/A weeks). Current week is excluded until it becomes last week. Anyone promoted in the last 12 weeks needs another 12 weeks at 1600+ before being eligible again.">?</span></h3>
             <ul class="list">
@@ -2518,10 +2642,9 @@ function renderDashboard() {
                 }).join('') : '<li class="list-item">No one yet — keep pushing!</li>'}
             </ul>
         `;
-    }
+    }, sectionFallback);
 
-    const recentPromotionsEl = document.getElementById('recentPromotionsCard');
-    if (recentPromotionsEl) {
+    setSectionSafe(recentPromotionsEl, () => {
         const recent = (promotionsData.recent || []).filter(p => new Date(p.promotedAt).getTime() >= oneYearAgo).slice(0, 24);
         recentPromotionsEl.innerHTML = `
             <h3>Recent Promotions</h3>
@@ -2533,10 +2656,9 @@ function renderDashboard() {
                 }).join('') : '<li class="list-item muted">No promotions yet.</li>'}
             </ul>
         `;
-    }
+    }, sectionFallback);
 
-    const recentDemotionsEl = document.getElementById('recentDemotionsCard');
-    if (recentDemotionsEl) {
+    setSectionSafe(recentDemotionsEl, () => {
         const recentD = (promotionsData.recentDemotions || []).slice(0, 8);
         recentDemotionsEl.innerHTML = `
             <h3>Recent Demotions</h3>
@@ -2548,7 +2670,7 @@ function renderDashboard() {
                 }).join('') : '<li class="list-item muted">No demotions yet.</li>'}
             </ul>
         `;
-    }
+    }, sectionFallback);
 
     const demotionThreshold = getDemotionThreshold();
     // Demotion watch is always based on last completed week; never use current week until that week has started (become last week)
@@ -2604,7 +2726,7 @@ function renderDashboard() {
     // Limit to 8 for display
     const limitedDemotionList = demotionList.slice(0, 8);
 
-    if (demotionEl) {
+    setSectionSafe(demotionEl, () => {
         let demotionMessage = '';
         if (!demotionThreshold) {
             // No demotion watch active (Thursday 4:30am CT through Sunday 4:29am CT)
@@ -2669,9 +2791,9 @@ function renderDashboard() {
                 ${demotionMessage}
             </ul>
         `;
-    }
+    }, sectionFallback);
 
-    if (strategyEl) {
+    setSectionSafe(strategyEl, () => {
         const requiredMinimum = 80000;
         const momentumTarget = 900 * 50 * 4;
         const momentumPercent = Math.min(totalPoints / momentumTarget, 1);
@@ -2698,7 +2820,7 @@ function renderDashboard() {
                 Keep the momentum: <strong>${formatNumber(pointsNeeded)}</strong> total points are needed to bring every participant up to the 1600 goal.
             </p>
         `;
-    }
+    }, sectionFallback);
 }
 
 // Human-readable "how long ago" for join date (e.g. "Joined 1 wk, 2 days and 20 hrs ago")
