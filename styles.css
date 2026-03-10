@@ -421,6 +421,17 @@ td:not(:first-child) {
     margin: 10px 0 20px;
 }
 
+#tab-summary .summary-three-cols {
+    grid-template-columns: repeat(3, 1fr);
+}
+#tab-summary .summary-promo-demo-row {
+    grid-template-columns: repeat(2, 1fr);
+}
+@media (max-width: 900px) {
+    #tab-summary .summary-three-cols { grid-template-columns: 1fr; }
+    #tab-summary .summary-promo-demo-row { grid-template-columns: 1fr; }
+}
+
 .dashboard-card {
     background: #ffffff;
     border: 1px solid #e1e6fb;

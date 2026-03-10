@@ -142,12 +142,19 @@
 
         <section class="tab-panel" id="tab-summary" aria-label="Summary dashboard">
             <section class="highlights" id="highlights"></section>
-            <p class="summary-legend" id="summaryLegend">Green = on track (1600+), yellow = nudge (800–1599), red = at risk.</p>
+            <div class="legend" aria-label="War point status key">
+                <span class="legend-item legend-green">1600+ (On Track)</span>
+                <span class="legend-item legend-yellow">800 - 1599 (Needs Nudge)</span>
+                <span class="legend-item legend-red">0 - 799 (At Risk)</span>
+                <span class="legend-item legend-na">N/A (New This Week)</span>
+            </div>
 
-            <section class="dashboard">
+            <section class="dashboard summary-three-cols" aria-label="Clan War Snapshot, Streaks, Momentum">
                 <div class="dashboard-card" id="clanStats"></div>
                 <div class="dashboard-card" id="streaksCard"></div>
                 <div class="dashboard-card" id="strategyBoard"></div>
+            </section>
+            <section class="dashboard summary-promo-demo-row" aria-label="Recent promotions and demotions">
                 <div class="dashboard-card" id="recentPromotionsCard"></div>
                 <div class="dashboard-card" id="recentDemotionsCard"></div>
             </section>
